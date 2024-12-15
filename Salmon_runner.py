@@ -296,7 +296,7 @@ def main():
                                     quant_options)
         # Run the job
         cmd_launcher = f"sbatch {job}"
-        #subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
+        subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
 
     # Cleaning all the files and temporal directories
     if clean:
