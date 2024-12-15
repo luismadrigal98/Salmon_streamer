@@ -58,15 +58,25 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd'):
         df_list = []
         sample_ids = []
 
-        # Find all directories ending with '_quant'
-        quant_dirs = [d for d in os.listdir(output_dir) if d.endswith('_quant') and os.path.isdir(os.path.join(output_dir, d))]
+        # Corrected directory listing
+        quant_dirs = [
+            d for d in os.listdir('.')
+            if d.endswith('_quant') and os.path.isdir(d)
+        ]
 
         for quant_dir in quant_dirs:
-            quant_path = os.path.join(output_dir, quant_dir, 'quant.sf')
+            quant_path = os.path.join(quant_dir, 'quant.sf')
             if os.path.exists(quant_path):
                 # Read the quant.sf file
-                df = pd.read_csv(quant_path, sep='\t', usecols=['Name', 'NumReads'])
-                df.rename(columns={'NumReads': quant_dir.replace('_quant', '')}, inplace=True)
+                df = pd.read_csv(
+                    quant_path,
+                    sep='\t',
+                    usecols=['Name', 'NumReads']
+                )
+                df.rename(
+                    columns={'NumReads': quant_dir.replace('_quant', '')},
+                    inplace=True
+                )
                 df_list.append(df.set_index('Name'))
                 sample_ids.append(quant_dir.replace('_quant', ''))
 
@@ -75,4 +85,4 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd'):
         combined_df.reset_index(inplace=True)
 
         # Write the combined table to a file
-        combined_df.to_csv(os.path.join(output_dir, result_name), sep='\t', index=False)
+        combined_df.to_csv(result_name, sep='\t', index=False)
