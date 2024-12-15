@@ -1,0 +1,8 @@
+{
+    "cSpell.words": [
+        "transcriptome"
+    ],
+    "python.analysis.extraPaths": [
+        "./src"
+    ]    
+}
