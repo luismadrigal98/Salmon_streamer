@@ -226,7 +226,7 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
     with open(job_script_path, 'w') as out:
         out.write("#!/bin/bash\n")
         out.write(f"#SBATCH --job-name=salmon_{name}\n")
-        out.write(f"#SBATCH --output={os.path.join(job_dir, f'salmon_{name}.out')}\n")
+        out.write(f"#SBATCH --output=salmon_{name}.out)\n")
         out.write("#SBATCH --partition=sixhour,eeb,kucg,kelly\n")
         out.write(f"#SBATCH --ntasks={threads}\n")
         out.write(f"#SBATCH --cpus-per-task=1\n")
@@ -243,6 +243,6 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         out.write(f"cd {w_dir}\n")
         out.write(f"salmon quant -i {salmon_index} ")
         out.write(f"{' '.join(quant_options)}")
-        out.write(f"-r {file} -o {os.path.join(output_dir, out_name)} \n")
+        out.write(f" -r {file} -o {os.path.join(output_dir, out_name)} \n")
 
     return job_script_path
