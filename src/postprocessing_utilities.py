@@ -11,7 +11,7 @@ import subprocess
 import os
 import pandas as pd
 
-def combine_results(output_dir, mode = 'cmd'):
+def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd'):
     """
     Combine all Salmon quantification results into one table.
 
@@ -19,6 +19,8 @@ def combine_results(output_dir, mode = 'cmd'):
     ----------
     output_dir : str
         Path to the output directory containing the quantification results
+    result_name : str
+        Name of the output file to store the combined results
     mode : str
         Mode to run the commands. Options are 'cmd' for command line and 'python' for Python code.
     
@@ -48,7 +50,7 @@ def combine_results(output_dir, mode = 'cmd'):
         subprocess.run(cmd_paste, shell=True, executable='/bin/bash')
 
         # Manually sort the table so that 2 species are on alternative rows, and remove "quant" from header row
-        cmd_sort = r"perl -pe 's/.fastq//g ; s/_quant//g ; s/=/\t/ ; s/aName/aName\taName/' table.txt | sort -t$'\t' -k2,2 -k1,1 | perl -pe 's/ID\t/ID=/ ; s/\taName//' > table2.txt"
+        cmd_sort = r"perl -pe 's/.fastq//g ; s/_quant//g ; s/=/\t/ ; s/aName/aName\taName/' " + result_name + r" | sort -t$'\t' -k2,2 -k1,1 | perl -pe 's/ID\t/ID=/ ; s/\taName//' > table2.txt"
         subprocess.run(cmd_sort, shell=True, executable='/bin/bash')
 
     elif mode == 'python':
@@ -73,4 +75,4 @@ def combine_results(output_dir, mode = 'cmd'):
         combined_df.reset_index(inplace=True)
 
         # Write the combined table to a file
-        combined_df.to_csv(os.path.join(output_dir, 'table.txt'), sep='\t', index=False)
+        combined_df.to_csv(os.path.join(output_dir, result_name), sep='\t', index=False)
