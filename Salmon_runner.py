@@ -203,11 +203,15 @@ def main():
         logging.error('The alternative genome does not exist')
         sys.exit(1)
     
-    # Check if the working directory exists
+    # Check if the working directory exists and make it a full path if '.' is given
     if not os.path.isdir(working_directory):
         logging.error('The working directory does not exist')
         logging.info('Creating the working directory')
         os.mkdir(working_directory)
+    if working_directory == '.':
+        working_directory = os.getcwd()
+        ## DEBUGGING
+        print(working_directory)
     
     # Check if the output directory exists
     if not os.path.isdir(output_dir):
@@ -278,6 +282,15 @@ def main():
             subprocess.run(cmd_gunzip, shell=True, executable='/bin/bash')
             file_path = file_path.replace('.gz', '')
         
+        # Checking that the file includes the fastq extension
+        # If not, rename the file on the fly to include the .fastq extension and modify the file_path
+        # NOTE: Only fastq files are accepted
+
+        if not file_path.endswith('.fastq'):
+            new_file_path = file_path + '.fastq'
+            os.rename(file_path, new_file_path)
+            file_path = new_file_path
+
         job = master_script_generator(file_path, working_directory, job_dir, output_dir, threads, memory,
                                     os.path.join(temporal_directory, 'salmon_index'),
                                     quant_options)
