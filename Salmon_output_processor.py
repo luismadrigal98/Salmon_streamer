@@ -11,7 +11,6 @@ This program will take the output directory of the Salmon pipeline and combine a
 
 """
 
-import os
 import argparse
 from src.postprocessing_utilities import combine_results
 
