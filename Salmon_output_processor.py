@@ -28,9 +28,21 @@ def main():
         help='Directory with the output of the Salmon pipeline'
     )
 
+    global_group.add_argument(
+        '--result_name', '--rn',
+        default='table.txt',
+        help='Name of the output file to store the combined results'
+    )
+
+    global_group.add_argument(
+        '--mode', '-m',
+        default='cmd',
+        help='Mode to run the commands. Options are "cmd" for command line and "python" for Python code.'
+    )
+
     args = parser.parse_args()
 
-    combine_results(args.output)
+    combine_results(args.output, args.result_name, args.mode)
 
 if __name__ == '__main__':
     main()
