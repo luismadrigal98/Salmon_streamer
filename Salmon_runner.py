@@ -115,7 +115,7 @@ def main():
         '--quant_options', '-qo',
         required=False,
         help='Salmon quant options as a single string',
-        default='--noLengthCorrection -l A -p 1'
+        default='--noLengthCorrection -l U -p 1'
     )
 
     miscellanous_group = parser.add_argument_group(
