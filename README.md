@@ -84,8 +84,8 @@ Arguments
 ```
 
 # Authors
-Luis Javier Madrigal-Roca
-Paris Veltsos
+Luis Javier Madrigal-Roca, 
+Paris Veltsos, 
 John K. Kelly
 
 # License
