@@ -16,7 +16,7 @@ from Bio import SeqIO
 def homogenize_headers(input_file, output_file, only_chrom):
     """
     This function homogenizes the headers of a FASTA file by removing the characters after the first space in the header.
-    This is done to avoid problems with the headers when using Salmon.
+    This is done to avoid problems with the header formats when using Salmon.
 
     Parameters
     ----------
@@ -42,7 +42,7 @@ def fasta_header_homogenizer(ref_genome, alt_genome, out_dir, only_chrom = True)
     """
     This function homogenizes the headers of the reference genome and the alternative genome.
     The headers are homogenized by removing the characters after the first space in the header.
-    This is done to avoid problems with the headers when using Salmon.
+    This is done to avoid problems with different header formats when using Salmon.
     
     Parameters
     ----------
@@ -62,8 +62,8 @@ def fasta_header_homogenizer(ref_genome, alt_genome, out_dir, only_chrom = True)
     str
         Path to the alternative genome with homogenized headers
     """
-    ref_genome_homogenized = os.path.join(out_dir, os.path.basename(ref_genome).split('.')[0] + '_homogenized.fasta')
-    alt_genome_homogenized = os.path.join(out_dir, os.path.basename(alt_genome).split('.')[0] + '_homogenized.fasta')
+    ref_genome_homogenized = os.path.join(out_dir, os.path.basename(ref_genome).rsplit('.', 1)[0] + '_homogenized.fasta') # rsplit removes the extension of the input file
+    alt_genome_homogenized = os.path.join(out_dir, os.path.basename(alt_genome).rsplit('.', 1)[0] + '_homogenized.fasta') # rsplit removes the extension of the input file
 
     # Process reference genome
     homogenize_headers(ref_genome, ref_genome_homogenized, only_chrom)
@@ -73,7 +73,7 @@ def fasta_header_homogenizer(ref_genome, alt_genome, out_dir, only_chrom = True)
 
     return ref_genome_homogenized, alt_genome_homogenized
 
-def add_name_to_fasta_headers(fasta_file, name):
+def add_name_to_fasta_headers(fasta_file, name, remove_bak = True):
     """
     This function modifies the headers of a FASTA file in place by adding a specific name after each chromosome.
 
@@ -93,6 +93,10 @@ def add_name_to_fasta_headers(fasta_file, name):
             if line.startswith('>'):
                 line = line.strip() + f"_{name}\n"
             print(line, end='')
+    
+    # If no error occurs, remove the backup file if flag set to True (default)
+    if remove_bak:
+        os.remove(fasta_file + '.bak')
 
 def get_contig_names_for_decoys(mg_genome, sf_genome, output_file):
     """

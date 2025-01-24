@@ -26,7 +26,7 @@ from preprocessing_utilities import *
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Salmon pipeline. This pipeline allows the quantification of RNA-seq reads using a reference genome, the raw reads in fastq format, and the fast selective alignment algorithm (SA)')
+    parser = argparse.ArgumentParser(description='Salmon pipeline. This pipeline allows the quantification of RNA-seq reads using a reference genome, the raw reads in fastq format, and the fast selective alignment algorithm (SA) implemented through salmon software')
 
     global_group = parser.add_argument_group(
         'Global arguments', 
@@ -142,7 +142,7 @@ def main():
         '--memory', '-m',
         type=int,
         required=False,
-        help='Memory to use in the cluster for individual quantification jobs',
+        help='Memory to use in the computing cluster for individual quantification jobs',
         default=2
     )
 
@@ -238,9 +238,10 @@ def main():
     reference_homogenized, alternative_homogenized = fasta_header_homogenizer(reference, alternative, working_directory, chrom_level)
 
     # Add the specific names to the chromosomes (Modification in place)
+    # This will help to differentiate the chromosomes from the reference and the alternative genomes for further analysis
 
-    add_name_to_fasta_headers(reference_homogenized, reference_name)
-    add_name_to_fasta_headers(alternative_homogenized, alternative_name)
+    add_name_to_fasta_headers(reference_homogenized, reference_name, remove_bak = True)
+    add_name_to_fasta_headers(alternative_homogenized, alternative_name, remove_bak = True)
 
     # Extract the contig names for the decoys
 
