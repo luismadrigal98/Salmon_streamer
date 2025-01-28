@@ -98,7 +98,7 @@ def add_name_to_fasta_headers(fasta_file, name, remove_bak = True):
     if remove_bak:
         os.remove(fasta_file + '.bak')
 
-def get_contig_names_for_decoys(ref_genome, alt_genome, output_file):
+def get_contig_names_for_decoys(ref_genome, alt_genome = None, output_file = 'decoys.txt'):
     """
     Extract contig names from the given FASTA files and prepare a list of decoys.
 
@@ -107,7 +107,7 @@ def get_contig_names_for_decoys(ref_genome, alt_genome, output_file):
     ref_genome : str
         Path to the ref_genome FASTA file
     alt_genome : str
-        Path to the alt_genome FASTA file
+        Path to the alt_genome FASTA file. It is none by default.
     output_file : str
         Path to the output file for decoy names
 
@@ -127,7 +127,7 @@ def get_contig_names_for_decoys(ref_genome, alt_genome, output_file):
     cmd_sed = f"sed -i.bak -e 's/>//g' {output_file}"
     subprocess.run(cmd_sed, shell=True)
 
-def concatenate_fasta_files(transcriptome, ref_genome, alt_genome, output_file):
+def concatenate_fasta_files(transcriptome, ref_genome, alt_genome = None, output_file = 'transcriptome_genome.fasta'):
     """
     Concatenate the transcriptome and the genomes into a single FASTA file.
 
@@ -138,7 +138,7 @@ def concatenate_fasta_files(transcriptome, ref_genome, alt_genome, output_file):
     ref_genome : str
         Path to the reference genome FASTA file
     alt_genome : str
-        Path to the alternative genome FASTA file
+        Path to the alternative genome FASTA file. It is None by default.
     output_file : str
         Path to the output file for the concatenated FASTA file
 
@@ -147,8 +147,13 @@ def concatenate_fasta_files(transcriptome, ref_genome, alt_genome, output_file):
     None
     """
     
-    # Concatenate the files
-    cmd_cat = f"cat {transcriptome} {ref_genome} {alt_genome} > {output_file}"
+    if alt_genome is None:
+        # Concatenate the files
+        cmd_cat = f"cat {transcriptome} {ref_genome} > {output_file}"
+    else:
+        cmd_cat = f"cat {transcriptome} {ref_genome} {alt_genome} > {output_file}"
+
+    # Run the command
     subprocess.run(cmd_cat, shell=True, executable='/bin/bash')
 
 def run_salmon_index(transcriptome_genome, decoy_file, threads, output_dir, output_name, salmon_options):
