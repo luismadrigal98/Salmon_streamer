@@ -236,7 +236,7 @@ def main():
         sys.exit(1)
 
     # Check if the alternative name is given
-    if alternative_name is None:
+    if alternative is None and alternative_name is None:
         logging.error('The alternative name is not given')
         sys.exit(1)
 
@@ -251,7 +251,7 @@ def main():
     # Add the specific names to the chromosomes (Modification in place)
     # This will help to differentiate the chromosomes from the reference and the alternative genomes for further analysis
 
-    if alternative is None:
+    if alternative is not None:
         add_name_to_fasta_headers(reference_homogenized, reference_name, remove_bak = True)
         add_name_to_fasta_headers(alternative_homogenized, alternative_name, remove_bak = True)
 
