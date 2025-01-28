@@ -7,6 +7,12 @@ This program will take as input the directory with the fastq files that are goin
 be mapped to the transcriptome. It will deploy the genome-wide decoys and it going to
 produce the table with the quantification of the transcripts derived from Salmon.
 
+It can work using two different approaches:
+1) It can quantity the gene expression using a reference genome
+2) It can quantify the gene expression using both, a reference genome and an alternative genome, for which case
+the table will contain the quantification of the transcripts from the reference genome and the alternative genome.
+It could be useful if you care about expression bias in hybrids and other similar cases.
+
 """
 
 import os
@@ -53,7 +59,8 @@ def main():
 
     global_group.add_argument(
         '--alternative', '-a',
-        required=True,
+        required=False,
+        default=None,
         help='Alternative genome in fasta format'
     )
 
@@ -91,7 +98,7 @@ def main():
     naming_group.add_argument(
         '--alternative_name', '-an',
         required=False,
-        help='Name of the alternative genome'
+        help='Name of the alternative genome. It is advisable to use a different name from the reference genome when both provided'
     )
 
     salmon_index_group = parser.add_argument_group(
@@ -199,7 +206,7 @@ def main():
         sys.exit(1)
 
     # Check if the alternative genome exists
-    if not os.path.isfile(alternative):
+    if alternative is not None and not os.path.isfile(alternative):
         logging.error('The alternative genome does not exist')
         sys.exit(1)
     
@@ -234,14 +241,19 @@ def main():
         sys.exit(1)
 
     # Homogenize the names of the chromosomes and add the specific names
-
-    reference_homogenized, alternative_homogenized = fasta_header_homogenizer(reference, alternative, working_directory, chrom_level)
+    if alternative is None:
+        reference_homogenized = os.path.join(out_dir, os.path.basename(ref_genome).rsplit('.', 1)[0] + '_homogenized.fasta')
+        reference_homogenized = homogenize_headers(reference, reference_homogenized, chrom_level)
+        alternative_homogenized = None
+    else:
+        reference_homogenized, alternative_homogenized = fasta_header_homogenizer(reference, alternative, working_directory, chrom_level)
 
     # Add the specific names to the chromosomes (Modification in place)
     # This will help to differentiate the chromosomes from the reference and the alternative genomes for further analysis
 
-    add_name_to_fasta_headers(reference_homogenized, reference_name, remove_bak = True)
-    add_name_to_fasta_headers(alternative_homogenized, alternative_name, remove_bak = True)
+    if alternative is None:
+        add_name_to_fasta_headers(reference_homogenized, reference_name, remove_bak = True)
+        add_name_to_fasta_headers(alternative_homogenized, alternative_name, remove_bak = True)
 
     # Extract the contig names for the decoys
 

@@ -98,16 +98,16 @@ def add_name_to_fasta_headers(fasta_file, name, remove_bak = True):
     if remove_bak:
         os.remove(fasta_file + '.bak')
 
-def get_contig_names_for_decoys(mg_genome, sf_genome, output_file):
+def get_contig_names_for_decoys(ref_genome, alt_genome, output_file):
     """
     Extract contig names from the given FASTA files and prepare a list of decoys.
 
     Parameters
     ----------
-    mg_genome : str
-        Path to the mg_genome FASTA file
-    sf_genome : str
-        Path to the sf_genome FASTA file
+    ref_genome : str
+        Path to the ref_genome FASTA file
+    alt_genome : str
+        Path to the alt_genome FASTA file
     output_file : str
         Path to the output file for decoy names
 
@@ -116,8 +116,12 @@ def get_contig_names_for_decoys(mg_genome, sf_genome, output_file):
     None
     """
     # Extract contig names
-    cmd_grep = f"grep '^>' <(cat {mg_genome} {sf_genome}) | cut -d ' ' -f 1 > {output_file}"
-    subprocess.run(cmd_grep, shell=True, executable='/bin/bash')
+    
+    if alt_genome is None:
+        cmd_grep = f"grep '^>' {ref_genome} | cut -d ' ' -f 1 > {output_file}"
+    else:
+        cmd_grep = f"grep '^>' <(cat {ref_genome} {alt_genome}) | cut -d ' ' -f 1 > {output_file}"
+        subprocess.run(cmd_grep, shell=True, executable='/bin/bash')
 
     # Clean up the decoy list
     cmd_sed = f"sed -i.bak -e 's/>//g' {output_file}"
