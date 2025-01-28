@@ -121,7 +121,8 @@ def get_contig_names_for_decoys(ref_genome, alt_genome = None, output_file = 'de
         cmd_grep = f"grep '^>' {ref_genome} | cut -d ' ' -f 1 > {output_file}"
     else:
         cmd_grep = f"grep '^>' <(cat {ref_genome} {alt_genome}) | cut -d ' ' -f 1 > {output_file}"
-        subprocess.run(cmd_grep, shell=True, executable='/bin/bash')
+    
+    subprocess.run(cmd_grep, shell=True, executable='/bin/bash')
 
     # Clean up the decoy list
     cmd_sed = f"sed -i.bak -e 's/>//g' {output_file}"
