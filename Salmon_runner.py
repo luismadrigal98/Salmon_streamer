@@ -231,7 +231,7 @@ def main():
         os.mkdir(temporal_directory)
 
     # Check if the reference name is given
-    if reference_name is None:
+    if alternative is None and reference_name is None:
         logging.error('The reference name is not given')
         sys.exit(1)
 
