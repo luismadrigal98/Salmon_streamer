@@ -242,7 +242,7 @@ def main():
 
     # Homogenize the names of the chromosomes and add the specific names
     if alternative is None:
-        reference_homogenized = os.path.join(out_dir, os.path.basename(ref_genome).rsplit('.', 1)[0] + '_homogenized.fasta')
+        reference_homogenized = os.path.join(output_dir, os.path.basename(ref_genome).rsplit('.', 1)[0] + '_homogenized.fasta')
         reference_homogenized = homogenize_headers(reference, reference_homogenized, chrom_level)
         alternative_homogenized = None
     else:
