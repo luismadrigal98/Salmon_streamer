@@ -231,12 +231,12 @@ def main():
         os.mkdir(temporal_directory)
 
     # Check if the reference name is given
-    if alternative is None and reference_name is None:
+    if alternative is not None and reference_name is None:
         logging.error('The reference name is not given')
         sys.exit(1)
 
     # Check if the alternative name is given
-    if alternative is None and alternative_name is None:
+    if alternative is not None and alternative_name is None:
         logging.error('The alternative name is not given')
         sys.exit(1)
 
