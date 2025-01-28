@@ -98,7 +98,7 @@ def add_name_to_fasta_headers(fasta_file, name, remove_bak = True):
     if remove_bak:
         os.remove(fasta_file + '.bak')
 
-def get_contig_names_for_decoys(ref_genome, alt_genome = None, output_file = 'decoys.txt'):
+def get_contig_names_for_decoys(ref_genome, alt_genome=None, output_file='decoys.txt'):
     """
     Extract contig names from the given FASTA files and prepare a list of decoys.
 
@@ -115,18 +115,35 @@ def get_contig_names_for_decoys(ref_genome, alt_genome = None, output_file = 'de
     -------
     None
     """
-    # Extract contig names
-    
-    if alt_genome is None:
-        cmd_grep = f"grep '^>' {ref_genome} | cut -d ' ' -f 1 > {output_file}"
-    else:
-        cmd_grep = f"grep '^>' <(cat {ref_genome} {alt_genome}) | cut -d ' ' -f 1 > {output_file}"
-    
-    subprocess.run(cmd_grep, shell=True, executable='/bin/bash')
+    # Ensure the output directory exists
+    output_dir = os.path.dirname(output_file)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    # Clean up the decoy list
-    cmd_sed = f"sed -i.bak -e 's/>//g' {output_file}"
-    subprocess.run(cmd_sed, shell=True)
+    # Extract contig names
+    try:
+        if alt_genome is None:
+            cmd_grep = f"grep '^>' {ref_genome} | cut -d ' ' -f 1 > {output_file}"
+        else:
+            cmd_grep = f"grep '^>' <(cat {ref_genome} {alt_genome}) | cut -d ' ' -f 1 > {output_file}"
+        
+        print(f"Running command: {cmd_grep}")
+        subprocess.run(cmd_grep, shell=True, executable='/bin/bash', check=True)
+
+        # Check if the output file is created and not empty
+        if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+            raise FileNotFoundError(f"The decoy file {output_file} was not created or is empty.")
+        
+        # Clean up the decoy list
+        cmd_sed = f"sed -i.bak -e 's/>//g' {output_file}"
+        print(f"Running command: {cmd_sed}")
+        subprocess.run(cmd_sed, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error running command: {e.cmd}")
+        raise
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        raise
 
 def concatenate_fasta_files(transcriptome, ref_genome, alt_genome = None, output_file = 'transcriptome_genome.fasta'):
     """

@@ -257,7 +257,7 @@ def main():
 
     # Extract the contig names for the decoys
 
-    decoy_file = os.path.join(temporal_directory, 'decoys.txt')
+    decoy_file = os.path.join(temporal_directory, 'decoys')
 
     get_contig_names_for_decoys(reference_homogenized, alternative_homogenized, decoy_file)
 
