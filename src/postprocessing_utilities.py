@@ -11,7 +11,7 @@ import subprocess
 import os
 import pandas as pd
 
-def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd'):
+def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', includes_alternative_genome = False):
     """
     Combine all Salmon quantification results into one table.
 
@@ -32,7 +32,7 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd'):
     os.chdir(output_dir)
 
     if mode == 'cmd':
-
+        
         # Output column 5 (counts, not TPM column 4) as text file with ID as name
         cmd_cut = "for i in $(ls | grep quant); do cut -f5 $i/quant.sf > $i.txt; done"
         subprocess.run(cmd_cut, shell=True, executable='/bin/bash')
@@ -42,16 +42,19 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd'):
         subprocess.run(cmd_replace, shell=True, executable='/bin/bash')
 
         # Get gene names from one of the results, to be used as first column in compiled results file
-        cmd_cut_gene_names = "cut -f1 s7_767-075_quant/quant.sf > 1count.txt"
+        # Dynamically get gene names from the first quantification result
+        first_quant_dir = subprocess.check_output("ls | grep quant | head -n 1", shell=True, executable='/bin/bash').decode().strip()
+        cmd_cut_gene_names = f"cut -f1 {first_quant_dir}/quant.sf > 1count.txt"
         subprocess.run(cmd_cut_gene_names, shell=True, executable='/bin/bash')
 
         # Put everything together
-        cmd_paste = "paste *count* > table.txt"
+        cmd_paste = f"paste *count* > {result_name}"
         subprocess.run(cmd_paste, shell=True, executable='/bin/bash')
 
-        # Manually sort the table so that 2 species are on alternative rows, and remove "quant" from header row
-        cmd_sort = r"perl -pe 's/.fastq//g ; s/_quant//g ; s/=/\t/ ; s/aName/aName\taName/' " + result_name + r" | sort -t$'\t' -k2,2 -k1,1 | perl -pe 's/ID\t/ID=/ ; s/\taName//' > table2.txt"
-        subprocess.run(cmd_sort, shell=True, executable='/bin/bash')
+        if includes_alternative_genome:
+            # Manually sort the table so that 2 species are on alternative rows, and remove "quant" from header row
+            cmd_sort = r"perl -pe 's/.fastq//g ; s/_quant//g ; s/=/\t/ ; s/aName/aName\taName/' " + result_name + r" | sort -t$'\t' -k2,2 -k1,1 | perl -pe 's/ID\t/ID=/ ; s/\taName//' > clean_" + result_name
+            subprocess.run(cmd_sort, shell=True, executable='/bin/bash')
 
     elif mode == 'python':
         # List to store DataFrames

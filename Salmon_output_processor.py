@@ -40,9 +40,15 @@ def main():
         help='Mode to run the commands. Options are "cmd" for command line and "python" for Python code.'
     )
 
+    global_group.add_argument(
+        '--includes_alternative_genome',
+        action='store_true',
+        help='If True, the alternative genome was included in the analysis.'
+    )
+
     args = parser.parse_args()
 
-    combine_results(args.output, args.result_name, args.mode)
+    combine_results(args.output, args.result_name, args.mode, args.includes_alternative_genome)
 
 if __name__ == '__main__':
     main()
