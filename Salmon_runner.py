@@ -243,7 +243,7 @@ def main():
     # Homogenize the names of the chromosomes and add the specific names
     if alternative is None:
         reference_homogenized = os.path.join(output_dir, os.path.basename(reference).rsplit('.', 1)[0] + '_homogenized.fasta')
-        reference_homogenized = homogenize_headers(reference, reference_homogenized, chrom_level)
+        homogenize_headers(reference, reference_homogenized, chrom_level)
         alternative_homogenized = None
     else:
         reference_homogenized, alternative_homogenized = fasta_header_homogenizer(reference, alternative, working_directory, chrom_level)
@@ -257,7 +257,7 @@ def main():
 
     # Extract the contig names for the decoys
 
-    decoy_file = os.path.join(temporal_directory, 'decoys')
+    decoy_file = os.path.join(temporal_directory, 'decoys.txt')
 
     get_contig_names_for_decoys(reference_homogenized, alternative_homogenized, decoy_file)
 

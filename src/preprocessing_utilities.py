@@ -98,7 +98,7 @@ def add_name_to_fasta_headers(fasta_file, name, remove_bak = True):
     if remove_bak:
         os.remove(fasta_file + '.bak')
 
-def get_contig_names_for_decoys(ref_genome, alt_genome=None, output_file='decoys.txt'):
+def get_contig_names_for_decoys(ref_genome, alt_genome = None, output_file = 'decoys.txt'):
     """
     Extract contig names from the given FASTA files and prepare a list of decoys.
 
@@ -120,13 +120,15 @@ def get_contig_names_for_decoys(ref_genome, alt_genome=None, output_file='decoys
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    print(ref_genome)
+
     # Extract contig names
     try:
         if alt_genome is None:
             cmd_grep = f"grep '^>' {ref_genome} | cut -d ' ' -f 1 > {output_file}"
         else:
             cmd_grep = f"grep '^>' <(cat {ref_genome} {alt_genome}) | cut -d ' ' -f 1 > {output_file}"
-        
+
         print(f"Running command: {cmd_grep}")
         subprocess.run(cmd_grep, shell=True, executable='/bin/bash', check=True)
 
