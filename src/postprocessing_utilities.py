@@ -31,7 +31,7 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', include
     # Change to the output directory
     os.chdir(output_dir)
 
-    if mode == 'cmd':
+    if mode == 'cmd': # Currently broken!!!
         
         # Output column 5 (counts, not TPM column 4) as text file with ID as name
         cmd_cut = "for i in $(ls | grep quant); do cut -f5 $i/quant.sf > $i.txt; done"
