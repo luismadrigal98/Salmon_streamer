@@ -263,7 +263,7 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         out.write("#SBATCH --partition=sixhour,eeb,kucg,kelly\n")
         out.write(f"#SBATCH --ntasks={threads}\n")
         out.write(f"#SBATCH --cpus-per-task=1\n")
-        out.write("#SBATCH --time=06:00:00\n")
+        out.write("#SBATCH --time=05:59:00\n")
         out.write("#SBATCH --mail-user=l338m483@ku.edu\n")
         out.write("#SBATCH --mail-type=FAIL\n")
         out.write(f"#SBATCH --mem-per-cpu={memory}g\n")
