@@ -89,7 +89,7 @@ def main(args):
 
     # Building the liftoff command
     cmd = f"{liftoff_path} -g {annotation_gff3} -o {output} -dir {intermediate_dir} " + \
-            f"-mm2_options {mm2_options} -m {minimap_path} {target} {reference}"
+            f"-mm2_options '{mm2_options}' -m {minimap_path} {target} {reference}"
     
     # Run the command
     logging.info(f"Running liftoff command: {cmd}")

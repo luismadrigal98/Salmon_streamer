@@ -35,7 +35,7 @@ def main():
     ann_transfer_parser.add_argument('--target', required=True, help='Target genome in fasta format')
     ann_transfer_parser.add_argument('--reference', required=True, help='Reference genome in fasta format')
     ann_transfer_parser.add_argument('--annotation_gff3', required=True, help='Annotation file in gff3 format')
-    ann_transfer_parser.add_argument('--output', required=True, help='Output directory for the annotation transfer')
+    ann_transfer_parser.add_argument('--output', required=True, help='Output file for the annotation transfer. This will be a gff3 file')
     ann_transfer_parser.add_argument('--intermediate_dir', required=True, help='Intermediate directory for the annotation transfer')
     ann_transfer_parser.add_argument('--liftoff_path', required=False, default='~/.conda/envs/salmon/bin/liftoff',
                                         help='Path to the liftoff executable')
