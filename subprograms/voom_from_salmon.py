@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 This program will preprocess the raw ouptut from Salmon to be used in voom.
 
