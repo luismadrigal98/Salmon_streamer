@@ -15,14 +15,42 @@ import sys
 import subprocess
 import os
 
-# Import necessary utilities
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.gff3_transference import *
-
-## Setting up logging
-logging.basicConfig(level=logging.INFO)
+## Setting up logging (fancy style)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 def main(args):
+    """
+    Run Liftoff to transfer genome annotations from a reference to a target genome.
+    This function extracts arguments, validates input/output paths, and executes
+    the Liftoff tool to transfer annotations. It creates necessary directories
+    if they don't exist and checks for successful execution.
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        Command line arguments containing:
+        - target: Path to the target genome file
+        - reference: Path to the reference genome file
+        - annotation_gff3: Path to the annotation file in GFF3 format
+        - output: Path to the output file
+        - intermediate_dir: Directory for intermediate files
+        - liftoff_path: Path to the Liftoff executable
+        - minimap_path: Path to the minimap executable
+        - mm2_options: Options for minimap2
+    Returns:
+    --------
+    None
+        The function exits with status code 1 if any input files are missing or
+        if the Liftoff command fails.
+    Side Effects:
+    -------------
+    - Creates output and intermediate directories if they don't exist
+    - Writes transferred annotations to the output file
+    - Logs information, warnings, and errors
+    """
 
     # Decompress the arguments
     
@@ -38,6 +66,8 @@ def main(args):
     minimap_path = args.minimap_path
     mm2_options = args.mm2_options
 
+    output_dir = os.path.dirname(output)
+
     # Check input, ouptput and intermediate directories
     if not os.path.isfile(target):
         logging.error(f'The target file does not exist: {target}')
@@ -48,10 +78,10 @@ def main(args):
     if not os.path.isfile(annotation_gff3):
         logging.error(f'The annotation file does not exist: {annotation_gff3}')
         sys.exit(1)
-    if not os.path.isdir(output):
+    if not os.path.isdir(output_dir):
         logging.warning('The output directory does not exist')
         logging.info('Creating the output directory')
-        os.makedirs(output, exist_ok=True)       
+        os.makedirs(output_dir, exist_ok=True)       
     if not os.path.isdir(intermediate_dir):
         logging.warning('The intermediate directory does not exist')
         logging.info('Creating the intermediate directory')
