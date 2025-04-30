@@ -39,14 +39,14 @@ def main(args):
     mm2_options = args.mm2_options
 
     # Check input, ouptput and intermediate directories
-    if not os.path.isdir(target):
-        logging.error('The target directory does not exist')
+    if not os.path.isfile(target):
+        logging.error(f'The target file does not exist: {target}')
         sys.exit(1)
-    if not os.path.isdir(reference):
-        logging.error('The reference directory does not exist')
+    if not os.path.isfile(reference):
+        logging.error(f'The reference file does not exist: {reference}')
         sys.exit(1)
-    if not os.path.isdir(annotation_gff3):
-        logging.error('The annotation directory does not exist')
+    if not os.path.isfile(annotation_gff3):
+        logging.error(f'The annotation file does not exist: {annotation_gff3}')
         sys.exit(1)
     if not os.path.isdir(output):
         logging.warning('The output directory does not exist')
