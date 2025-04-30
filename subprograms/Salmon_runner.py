@@ -16,7 +16,6 @@ It could be useful if you care about expression bias in hybrids and other simila
 """
 
 import os
-import argparse
 import subprocess
 import sys
 import logging
@@ -30,136 +29,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from preprocessing_utilities import *
 
-def main():
-
-    parser = argparse.ArgumentParser(description='Salmon pipeline. This pipeline allows the quantification of RNA-seq reads using a reference genome, the raw reads in fastq format, and the fast selective alignment algorithm (SA) implemented through salmon software')
-
-    global_group = parser.add_argument_group(
-        'Global arguments', 
-        description = 'Directory and path settings'
-    )
-
-    global_group.add_argument(
-        '-i', '--input', 
-        required=True, 
-        help='Directory with the fastq files'
-    )
-
-    global_group.add_argument(
-        '--transcriptome', '--tf',
-        required=True,
-        help='Transcriptome in fasta format'
-    )
-
-    global_group.add_argument(
-        '--reference', '-r',
-        required=True,
-        help='Reference genome in fasta format'
-    )
-
-    global_group.add_argument(
-        '--alternative', '-a',
-        required=False,
-        default=None,
-        help='Alternative genome in fasta format'
-    )
-
-    global_group.add_argument(
-        '--working_directory', '-w',
-        required=True,
-        help='Working directory',
-        default='.'
-    )
-
-    global_group.add_argument(
-        '--output', '-o',
-        required=True,
-        help='Output directory'
-    )
-
-    global_group.add_argument(
-        '--temporal_directory', '--temp',
-        required=False,
-        help='Temporal directory',
-        default='./TEMP'
-    )
-
-    naming_group = parser.add_argument_group(
-        'Naming arguments',
-        description='Naming settings the chromosomes'
-    )
-
-    naming_group.add_argument(
-        '--reference_name', '-rn',
-        required=False,
-        help='Name of the reference genome'
-    )
-
-    naming_group.add_argument(
-        '--alternative_name', '-an',
-        required=False,
-        help='Name of the alternative genome. It is advisable to use a different name from the reference genome when both provided'
-    )
-
-    salmon_index_group = parser.add_argument_group(
-        'Salmon index arguments',
-        description='Salmon index settings'
-    )
-
-    salmon_index_group.add_argument(
-        '--salmon_index_options', '-sio',
-        required=False,
-        help='Salmon index options as a single string',
-        default='--keepDuplicates -k 31'
-    )
-
-    salmon_quant_group = parser.add_argument_group(
-        'Salmon quant arguments',
-        description='Salmon quant settings'
-    )
-
-    salmon_quant_group.add_argument(
-        '--quant_options', '-qo',
-        required=False,
-        help='Salmon quant options as a single string',
-        default='--noLengthCorrection -l U -p 1'
-    )
-
-    miscellanous_group = parser.add_argument_group(
-        'Miscellanous arguments',
-        description='Miscellanous settings'
-    )
-
-    miscellanous_group.add_argument(
-        '--threads', '-t',
-        type=int,
-        required=False,
-        help='Number of threads to use',
-        default=1
-    )
-
-    miscellanous_group.add_argument(
-        '--chrom_level', '-c',
-        required=False,
-        help='Whether you want to remove scaffolds and contigs from the genomes',
-        default=True
-    )
-
-    miscellanous_group.add_argument(
-        '--memory', '-m',
-        type=int,
-        required=False,
-        help='Memory to use in the computing cluster for individual quantification jobs',
-        default=2
-    )
-
-    miscellanous_group.add_argument(
-        '--clean', '-cl',
-        action='store_true',
-        help='Clean the temporal directory after the run',
-        default=False
-    )
-
+def main(args):
     # Setting up basic logging configuration
     logging.basicConfig(level=logging.INFO)
 
@@ -167,9 +37,6 @@ def main():
     tqdm_format = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
 
     # Parse the arguments
-    args = parser.parse_args()
-
-    # Retrieve the arguments from the parser
     input_dir = args.input
     transcriptome = args.transcriptome
     reference = args.reference

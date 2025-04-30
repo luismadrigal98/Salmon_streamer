@@ -18,8 +18,8 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import functions from the existing modules
-from subprograms.Salmon_runner import main as run_main
-from subprograms.Salmon_output_processor import main as process_main
+from subprograms.Salmon_runner import main as run_salmon_main
+from subprograms.Salmon_output_processor import main as process_salmon_out_main
 from subprograms.voom_from_salmon import main as voom_main
 
 def main():
@@ -85,9 +85,8 @@ def main():
     args = parser.parse_args()
     
     # Execute the appropriate subcommand
-    if args.command == 'run':
-        sys.argv = [sys.argv[0]] + sys.argv[2:]  # Adjust argv to simulate direct call to the module
-        run_main()
+    if args.command == 'RunSalmonQuant':
+        run_salmon_main(args)
     elif args.command == 'process':
         sys.argv = [sys.argv[0]] + sys.argv[2:]  # Adjust argv to simulate direct call to the module
         process_main()
