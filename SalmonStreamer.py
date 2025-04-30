@@ -18,9 +18,9 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import functions from the existing modules
-from Salmon_runner import main as run_main
-from Salmon_output_processor import main as process_main
-from voom_from_salmon import main as voom_main
+from subprograms.Salmon_runner import main as run_main
+from subprograms.Salmon_output_processor import main as process_main
+from subprograms.voom_from_salmon import main as voom_main
 
 def main():
     # Create the main parser
@@ -28,7 +28,7 @@ def main():
     subparsers = parser.add_subparsers(dest='command', help='Subcommands')
     
     # Create the run subcommand parser (from Salmon_runner.py)
-    run_parser = subparsers.add_parser('run', help='Run Salmon pipeline for RNA-seq quantification')
+    run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
     
     # Global arguments for run
     global_group = run_parser.add_argument_group('Global arguments', 'Directory and path settings')
