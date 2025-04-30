@@ -37,9 +37,11 @@ def main():
     ann_transfer_parser.add_argument('--annotation_gff3', required=True, help='Annotation file in gff3 format')
     ann_transfer_parser.add_argument('--output', required=True, help='Output directory for the annotation transfer')
     ann_transfer_parser.add_argument('--intermediate_dir', required=True, help='Intermediate directory for the annotation transfer')
-    ann_transfer_parser.add_argument('--liftoff_path', required=True, help='Path to the liftoff executable')
-    ann_transfer_parser.add_argument('--minimap_path', required=True, help='Path to the minimap2 executable')
-    ann_transfer_parser.add_argument('--mm2_options', default='="-a --end-bonus 5 --eqx -N 50 -p 0.5"', help='Options for minimap2') # Note that the '=' is necessary for the default value to be parsed correctly
+    ann_transfer_parser.add_argument('--liftoff_path', required=False, default='~/.conda/envs/salmon/bin/liftoff',
+                                        help='Path to the liftoff executable')
+    ann_transfer_parser.add_argument('--minimap_path', required=False, default='~/.conda/envs/salmon/bin/minimap2',
+                                        help='Path to the minimap2 executable')
+    ann_transfer_parser.add_argument('--mm2_options', default='="-a --eqx -N 50 -p 0.5"', help='Options for minimap2') # Note that the '=' is necessary for the default value to be parsed correctly
 
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
