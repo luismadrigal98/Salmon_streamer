@@ -9,10 +9,9 @@ other intermediate files useful for upstream analysis.
 """
 
 import pandas as pd
-import argparse
 
-def main():
-    parser = argparse.ArgumentParser(description='Preprocess Salmon output for voom and execute voom-based analysis in R')
+def main(args):
+    pass # PLACEHOLDER FOR VOOM ANALYSIS
 
 if __name__ == '__main__':
     main()

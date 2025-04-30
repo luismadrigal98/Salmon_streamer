@@ -68,7 +68,7 @@ def main():
                         help='Clean the temporal directory after the run', default=False)
     
     # Create the process subcommand parser (from Salmon_output_processor.py)
-    process_parser = subparsers.add_parser('process', help='Process Salmon output into a combined table')
+    process_parser = subparsers.add_parser('ProcessSalmonOut', help='Process Salmon output into a combined table')
     process_parser.add_argument('-o', '--output', required=True, help='Directory with the output of the Salmon pipeline')
     process_parser.add_argument('--result_name', '--rn', default='table.txt', 
                             help='Name of the output file to store the combined results')
@@ -78,8 +78,10 @@ def main():
                             help='If True, the alternative genome was included in the analysis.')
     
     # Create the voom subcommand parser (from voom_from_salmon.py)
-    voom_parser = subparsers.add_parser('voom', help='Preprocess Salmon output for voom analysis')
+    voom_parser = subparsers.add_parser('Voom', help='Preprocess Salmon output for voom analysis')
     # Add arguments for voom analysis as needed
+
+    voom_parser.add_argument('-o', '--output', required=True, help='Directory with the output of the Salmon pipeline') # PLACEHOLDER
     
     # Parse arguments
     args = parser.parse_args()
@@ -87,9 +89,8 @@ def main():
     # Execute the appropriate subcommand
     if args.command == 'RunSalmonQuant':
         run_salmon_main(args)
-    elif args.command == 'process':
-        sys.argv = [sys.argv[0]] + sys.argv[2:]  # Adjust argv to simulate direct call to the module
-        process_main()
+    elif args.command == 'ProcessSalmonOut':
+        process_salmon_out_main(args)
     elif args.command == 'voom':
         sys.argv = [sys.argv[0]] + sys.argv[2:]  # Adjust argv to simulate direct call to the module
         voom_main()
