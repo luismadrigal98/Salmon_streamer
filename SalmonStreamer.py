@@ -21,12 +21,26 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from subprograms.Salmon_runner import main as run_salmon_main
 from subprograms.Salmon_output_processor import main as process_salmon_out_main
 from subprograms.voom_from_salmon import main as voom_main
+from subprograms.AnnTransfer import main as ann_transfer_main
 
 def main():
     # Create the main parser
     parser = argparse.ArgumentParser(description="Salmon streamer: RNA-seq data analysis pipeline.")
     subparsers = parser.add_subparsers(dest='command', help='Subcommands')
     
+    # Create the parser for annotation transfer
+    ann_transfer_parser = subparsers.add_parser('AnnTransfer', help='Transfer annotations from reference to alternative genome')
+
+    # Add arguments for annotation transfer
+    ann_transfer_parser.add_argument('--target', required=True, help='Target genome in fasta format')
+    ann_transfer_parser.add_argument('--reference', required=True, help='Reference genome in fasta format')
+    ann_transfer_parser.add_argument('--annotation_gff3', required=True, help='Annotation file in gff3 format')
+    ann_transfer_parser.add_argument('--output', required=True, help='Output directory for the annotation transfer')
+    ann_transfer_parser.add_argument('--intermediate_dir', required=True, help='Intermediate directory for the annotation transfer')
+    ann_transfer_parser.add_argument('--liftoff_path', required=True, help='Path to the liftoff executable')
+    ann_transfer_parser.add_argument('--minimap_path', required=True, help='Path to the minimap2 executable')
+    ann_transfer_parser.add_argument('--mm2_options', default='="-a --end-bonus 5 --eqx -N 50 -p 0.5"', help='Options for minimap2') # Note that the '=' is necessary for the default value to be parsed correctly
+
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
     
@@ -87,12 +101,13 @@ def main():
     args = parser.parse_args()
     
     # Execute the appropriate subcommand
-    if args.command == 'RunSalmonQuant':
+    if args.command == 'AnnTransfer':
+        ann_transfer_main(args)
+    elif args.command == 'RunSalmonQuant':
         run_salmon_main(args)
     elif args.command == 'ProcessSalmonOut':
         process_salmon_out_main(args)
-    elif args.command == 'voom':
-        sys.argv = [sys.argv[0]] + sys.argv[2:]  # Adjust argv to simulate direct call to the module
+    elif args.command == 'Voom':
         voom_main()
     else:
         parser.print_help()
