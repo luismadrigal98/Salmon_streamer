@@ -152,7 +152,8 @@ def generate_position_comparison(ref_gene_id, ref_gff_path,
         # Merge the two DataFrames on gene_id
 
         merged_df = pd.merge(liftover_gff, genes_metadata, on='gene_id', suffixes=((f'_liftoff_{alt_genome_id}', 
-                                                                                    f'_ref_{ref_gene_id}')))
+                                                                                    f'_ref_{ref_gene_id}')),
+                                                                                    how='left')
 
         # Save the comparison dataframe to the output file
         merged_df.to_csv(output_path, sep='\t', index=False, header=True)
