@@ -61,10 +61,10 @@ def main(args):
     output = args.output
     intermediate_dir = args.intermediate_dir
     
-    # Executables
-    liftoff_path = args.liftoff_path
-    minimap_path = args.minimap_path
-    mm2_options = args.mm2_options
+    # Executables - Expand user paths here
+    liftoff_path = os.path.expanduser(args.liftoff_path)
+    minimap_path = os.path.expanduser(args.minimap_path)
+    mm2_options = args.mm2_options # This should contain the string like "-a --eqx ..."
 
     output_dir = os.path.dirname(output)
 
@@ -78,22 +78,24 @@ def main(args):
     if not os.path.isfile(annotation_gff3):
         logging.error(f'The annotation file does not exist: {annotation_gff3}')
         sys.exit(1)
-    if not os.path.isdir(output_dir):
-        logging.warning('The output directory does not exist')
-        logging.info('Creating the output directory')
-        os.makedirs(output_dir, exist_ok=True)       
+    # Only create the output directory if it's specified and doesn't exist
+    if output_dir and not os.path.isdir(output_dir):
+        logging.warning(f'The output directory does not exist: {output_dir}')
+        logging.info(f'Creating the output directory: {output_dir}')
+        os.makedirs(output_dir, exist_ok=True)
     if not os.path.isdir(intermediate_dir):
         logging.warning('The intermediate directory does not exist')
         logging.info('Creating the intermediate directory')
         os.makedirs(intermediate_dir, exist_ok=True)
 
     # Building the liftoff command as a list for shell=False
+    # Pass the mm2_options string as the argument value
     cmd_list = [
         liftoff_path,
         '-g', annotation_gff3,
         '-o', output,
         '-dir', intermediate_dir,
-        '-mm2_options', mm2_options,
+        '-mm2_options', mm2_options, # Pass the string "-a --eqx ..." directly
         '-m', minimap_path,
         target,
         reference
@@ -127,7 +129,8 @@ def main(args):
         sys.exit(1)
     except FileNotFoundError:
         # Handle case where liftoff executable itself is not found
-        logging.error(f"Liftoff executable not found at: {liftoff_path}")
+        # Log the *expanded* path here for clarity
+        logging.error(f"Liftoff executable not found at the expanded path: {liftoff_path}")
         sys.exit(1)
     except Exception as e:
         # Catch any other unexpected errors during subprocess execution
