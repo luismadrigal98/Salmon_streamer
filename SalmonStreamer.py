@@ -58,6 +58,7 @@ def main():
     trans_gen_parser.add_argument('--cov-threshold', type=float, default=0.9, help="Minimum coverage threshold for liftover filtering (default: 0.9)")
     trans_gen_parser.add_argument('--seqid-threshold', type=float, default=0.9, help="Minimum sequence ID threshold for liftover filtering (default: 0.9)")
     trans_gen_parser.add_argument('--output-fasta', default='combined_transcriptome.fasta', help="Name for the final output FASTA file (default: combined_transcriptome.fasta)")
+    trans_gen_parser.add_argument('--keep-intermediate', action='store_true', help="Keep intermediate files (default: False)")
 
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')

@@ -140,7 +140,7 @@ def generate_position_comparison(ref_gene_id, ref_gff_path,
         # Chr_01  liftoff  gene    13982   16715   .       +       .       ID=MgIM767.01G000100.v2.1;Name=MgIM767.01G000100;
         liftover_gff = read_gff3_as_dataframe(liftover_gff_path)
         if preserve_interm:
-            liftover_gff.to_csv(os.path.join(output_path, f"Liftover_{ref_gene_id}"), 
+            liftover_gff.to_csv(os.path.join(output_path, f"Liftover_{alt_genome_id}"), 
                                 sep='\t', index=False, header=True)
 
     except FileNotFoundError:
@@ -148,20 +148,19 @@ def generate_position_comparison(ref_gene_id, ref_gff_path,
         sys.exit(1)
 
     try:
-        with open(output_path, "w") as outfile:
-            outfile.write('geneid\tref_chrom\tref_start\tref_end\tref_strand\talt_chrom\talt_start\talt_end\talt_strand\n')
-            for gene_id, data in pos_of_gene767.items():
-                if len(data) == 4: # Not found in liftover
-                    outfile.write(f"{gene_id}\t{'\t'.join(data)}\tNF\tNF\tNF\tNF\n")
-                elif len(data) == 8: # Found in liftover
-                    outfile.write(f"{gene_id}\t{'\t'.join(data)}\n")
-                else:
-                    logging.warning(f"Unexpected data length for gene {gene_id}: {len(data)}")
+        # Let's take advantage of pandas to do the comparison
+        # Merge the two DataFrames on gene_id
+
+        merged_df = pd.merge(liftover_gff, genes_metadata, on='gene_id', suffixes=((f'_liftoff_{alt_genome_id}', 
+                                                                                    f'_ref_{ref_gene_id}')))
+
+        # Save the comparison dataframe to the output file
+        merged_df.to_csv(output_path, sep='\t', index=False, header=True)
+
     except IOError as e:
         logging.error(f"Error writing position comparison file {output_path}: {e}")
         sys.exit(1)
     logging.info("Position comparison file generated.")
-
 
 def filter_gff_by_quality(alt_genome_id, liftover_gff_path, ref_gene_pos_path, original_ref_gff_path,
                         output_gene_list_path, output_ref_gff_path, output_alt_gff_path,

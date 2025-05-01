@@ -40,6 +40,7 @@ def main(args):
     cov_threshold = args.cov_threshold
     seqid_threshold = args.seqid_threshold
     output_fasta = args.output_fasta
+    keep_intermediate = args.keep_intermediate
 
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
@@ -53,7 +54,12 @@ def main(args):
 
 # --- Step 1: Generate Position Comparison (Optional but good for QC) ---
     try:
-        generate_position_comparison(alt_genome_id, liftover_gff, ref_gene_pos, pos_comparison_file)
+        generate_position_comparison(ref_gene_id = ref_genome_id, 
+                                    ref_gff_path = original_ref_gff,
+                                    alt_genome_id = alt_genome_id, 
+                                    liftover_gff_path = liftover_gff,
+                                    output_path = pos_comparison_file,
+                                    preserve_interm = True)
     except Exception as e:
         logging.error(f"Failed during position comparison generation: {e}")
         sys.exit(1)
