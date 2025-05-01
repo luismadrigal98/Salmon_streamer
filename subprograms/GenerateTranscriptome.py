@@ -32,7 +32,6 @@ def main(args):
     alt_genome_id = args.alt_genome_id
     ref_genome_id = args.ref_genome_id
     liftover_gff = args.liftover_gff
-    ref_gene_pos = args.ref_gene_pos
     original_ref_gff = args.original_ref_gff
     alt_genome_fasta = args.alt_genome_fasta
     ref_genome_fasta = args.ref_genome_fasta
@@ -52,21 +51,22 @@ def main(args):
     filtered_alt_gff = os.path.join(output_dir, f"ALT_{alt_genome_id}x{ref_genome_id}_cross.gff3")
     final_output_fasta_path = os.path.join(output_dir, output_fasta)
 
-# --- Step 1: Generate Position Comparison (Optional but good for QC) ---
+    # --- Step 1: Generate Position Comparison ---
     try:
         generate_position_comparison(ref_gene_id = ref_genome_id, 
                                     ref_gff_path = original_ref_gff,
                                     alt_genome_id = alt_genome_id, 
                                     liftover_gff_path = liftover_gff,
                                     output_path = pos_comparison_file,
-                                    preserve_interm = True)
+                                    preserve_interm = keep_intermediate) # Use keep_intermediate flag
     except Exception as e:
         logging.error(f"Failed during position comparison generation: {e}")
         sys.exit(1)
 
     # --- Step 2: Filter GFFs by Quality ---
     try:
-        filter_gff_by_quality(alt_genome_id, liftover_gff, ref_gene_pos, original_ref_gff,
+        # Pass pos_comparison_file instead of ref_gene_pos
+        filter_gff_by_quality(alt_genome_id, ref_genome_id, liftover_gff, pos_comparison_file, original_ref_gff,
                                 gene_list_file, filtered_ref_gff, filtered_alt_gff,
                                 cov_threshold, seqid_threshold)
     except Exception as e:
