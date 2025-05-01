@@ -22,6 +22,7 @@ from subprograms.Salmon_runner import main as run_salmon_main
 from subprograms.Salmon_output_processor import main as process_salmon_out_main
 from subprograms.voom_from_salmon import main as voom_main
 from subprograms.AnnTransfer import main as ann_transfer_main
+from subprograms.GenerateTranscriptome import main as generate_transcriptome
 
 def main():
     # Create the main parser
@@ -42,6 +43,20 @@ def main():
     ann_transfer_parser.add_argument('--minimap_path', required=False, default='~/.conda/envs/salmon/bin/minimap2',
                                         help='Path to the minimap2 executable')
     #ann_transfer_parser.add_argument('--mm2_options', default='="-a --eqx -N 50 -p 0.5"', help='Options for minimap2')  # THIS IS BROKEN IN LIFTOFF. THERE IS NO WAY OF PARSING THE OPTIONS
+
+    # Transcriptome builder parser
+    # --- Transcriptome Generation Subcommand ---
+    trans_gen_parser = subparsers.add_parser('GenerateTranscriptome', help='Generate combined transcriptome from liftover results')
+    trans_gen_parser.add_argument('--alt-genome-id', required=True, help="Identifier for the alternative genome (e.g., SWB)")
+    trans_gen_parser.add_argument('--liftover-gff', required=True, help="Input GFF from AnnTransfer subcommand")
+    trans_gen_parser.add_argument('--ref-gene-pos', required=True, help="Reference gene positions file (tab-separated: chr, start, end, strand, gene_id)")
+    trans_gen_parser.add_argument('--original-ref-gff', required=True, help="Original reference GFF file used for AnnTransfer")
+    trans_gen_parser.add_argument('--alt-genome-fasta', required=True, help="Alternative (target) genome FASTA file")
+    trans_gen_parser.add_argument('--ref-genome-fasta', required=True, help="Reference genome FASTA file")
+    trans_gen_parser.add_argument('--output-dir', required=True, help="Directory for intermediate and final output files")
+    trans_gen_parser.add_argument('--cov-threshold', type=float, default=0.9, help="Minimum coverage threshold for liftover filtering (default: 0.9)")
+    trans_gen_parser.add_argument('--seqid-threshold', type=float, default=0.9, help="Minimum sequence ID threshold for liftover filtering (default: 0.9)")
+    trans_gen_parser.add_argument('--output-fasta', default='combined_transcriptome.fasta', help="Name for the final output FASTA file (default: combined_transcriptome.fasta)")
 
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
@@ -105,6 +120,9 @@ def main():
     # Execute the appropriate subcommand
     if args.command == 'AnnTransfer':
         ann_transfer_main(args)
+    elif args.command == 'GenerateTranscriptome':
+        # Call the function to generate the transcriptome
+        generate_transcriptome(args)
     elif args.command == 'RunSalmonQuant':
         run_salmon_main(args)
     elif args.command == 'ProcessSalmonOut':
