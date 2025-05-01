@@ -26,6 +26,8 @@ preparing transcriptomes for RNA-seq analysis.
 
 import logging
 import sys
+import pandas as pd
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -35,7 +37,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-
 
 def read_fasta(fasta_path):
     """
@@ -81,36 +82,67 @@ def read_fasta(fasta_path):
     logging.info(f"Read {len(sequences)} sequences from {fasta_path}")
     return sequences
 
-def generate_position_comparison(alt_genome_id, liftover_gff_path, ref_gene_pos_path, output_path):
+def read_gff3_as_dataframe(gff_path):
+    """
+    Reads a GFF3 file and returns a DataFrame.
+
+    Parameters
+    ----------
+    gff_path : str
+        Path to the GFF3 file.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing the GFF3 data.
+    """
+    try:
+        gff_df = pd.read_csv(gff_path, sep='\t', header=None, comment='#')
+        gff_df.columns = ['chr', 'source', 'type', 'start', 'end', 'score', 'strand', 'phase', 'attributes']
+        # Filter for gene features
+        gff_df = gff_df[gff_df['type'] == 'gene']
+        # Extract gene_id from attributes
+        gff_df['gene_id'] = gff_df['attributes'].str.extract(r'ID=([^;]+)')
+        # Preserve only chromosome, start, and end columns, strand, and gene_id
+        gff_df = gff_df[['chr', 'start', 'end', 'strand', 'gene_id']]
+
+        return gff_df
+    except FileNotFoundError:
+        logging.error(f"GFF3 file not found: {gff_path}")
+        raise
+    except Exception as e:
+        logging.error(f"Error reading GFF3 file {gff_path}: {e}")
+        raise   
+
+def generate_position_comparison(ref_gene_id, ref_gff_path,
+                                alt_genome_id, liftover_gff_path,
+                                output_path, preserve_interm = True):
     """
     Compares gene positions between reference and liftover GFF.
-    (Based on original script 1)
+    (Based on original script: liftoff_genes_to_767positions.py from John)
     """
     logging.info(f"Generating position comparison file: {output_path}")
-    pos_of_gene767 = {}
+    
     try:
-        with open(ref_gene_pos_path, "r") as infile:
-            for line in infile:
-                cols = line.strip().split('\t')
-                if len(cols) >= 5:
-                    # Chr_01	13982	16715	+	MgIM767.01G000100.v2.1
-                    pos_of_gene767[cols[4]] = cols[0:4] # Store as list
+        # Read the annotation file as a DataFrame
+        # Chr_01  phytozomev13    gene    13982   16715   .       +       .       ID=MgIM767.01G000100.v2.1;Name=MgIM767.01G000100;
+        genes_metadata = read_gff3_as_dataframe(ref_gff_path)
+        if preserve_interm:
+            genes_metadata.to_csv(os.path.join(output_path, f"Gene_pos_{ref_gene_id}"), 
+                                sep='\t', index=False, header=True)
+        
     except FileNotFoundError:
-        logging.error(f"Reference gene position file not found: {ref_gene_pos_path}")
+        logging.error(f"Reference gene position file not found: {ref_gff_path}")
         sys.exit(1)
 
     try:
-        with open(liftover_gff_path, "r") as infile:
-            for line in infile:
-                if line.startswith('#'):
-                    continue
-                cols = line.strip().split('\t')
-                if len(cols) >= 9 and cols[2] == "gene":
-                    # chr1	Liftoff	gene	10515	13453	.	+	.	ID=MgIM767.01G000100.v2.1;...
-                    attributes = {k: v for k, v in (pair.split('=', 1) for pair in cols[8].split(';') if '=' in pair)}
-                    gene_id = attributes.get('ID')
-                    if gene_id and gene_id in pos_of_gene767:
-                        pos_of_gene767[gene_id].extend([cols[0], cols[3], cols[4], cols[6]]) # Add liftover info
+        # Read the liftover GFF file
+        # Chr_01  liftoff  gene    13982   16715   .       +       .       ID=MgIM767.01G000100.v2.1;Name=MgIM767.01G000100;
+        liftover_gff = read_gff3_as_dataframe(liftover_gff_path)
+        if preserve_interm:
+            liftover_gff.to_csv(os.path.join(output_path, f"Liftover_{ref_gene_id}"), 
+                                sep='\t', index=False, header=True)
+
     except FileNotFoundError:
         logging.error(f"Liftover GFF file not found: {liftover_gff_path}")
         sys.exit(1)
