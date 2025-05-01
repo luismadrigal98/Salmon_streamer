@@ -148,9 +148,9 @@ def generate_position_comparison(ref_gene_id, ref_gff_path,
         liftover_gff = read_gff3_as_dataframe(liftover_gff_path)
         if liftover_gff.empty:
             # This might be okay, just means no genes were lifted over
-             logging.warning(f"No 'gene' features found or extracted from liftover GFF: {liftover_gff_path}")
-             # Create an empty DataFrame with expected columns if liftover is empty to allow merge
-             liftover_gff = pd.DataFrame(columns=['chr', 'start', 'end', 'strand', 'gene_id'])
+            logging.warning(f"No 'gene' features found or extracted from liftover GFF: {liftover_gff_path}")
+            # Create an empty DataFrame with expected columns if liftover is empty to allow merge
+            liftover_gff = pd.DataFrame(columns=['chr', 'start', 'end', 'strand', 'gene_id'])
 
         # Optional: Save intermediate liftover gene data
         if preserve_interm:
@@ -238,9 +238,9 @@ def filter_gff_by_quality(alt_genome_id, ref_genome_id, liftover_gff_path, pos_c
 
         # Check if liftover columns exist, even if they contain NaNs
         if alt_chrom_col not in comparison_df.columns:
-             logging.warning(f"Liftover chromosome column '{alt_chrom_col}' not found in {pos_comparison_path}. Chromosome check might be affected.")
-             # Add dummy column to prevent key errors later, but checks will likely fail/be skipped
-             comparison_df[alt_chrom_col] = pd.NA
+            logging.warning(f"Liftover chromosome column '{alt_chrom_col}' not found in {pos_comparison_path}. Chromosome check might be affected.")
+            # Add dummy column to prevent key errors later, but checks will likely fail/be skipped
+            comparison_df[alt_chrom_col] = pd.NA
 
 
         for _, row in comparison_df.iterrows():
@@ -279,31 +279,31 @@ def filter_gff_by_quality(alt_genome_id, ref_genome_id, liftover_gff_path, pos_c
     liftover_quality_scores = {} # gene_id -> {'coverage': float, 'sequence_ID': float}
     try:
         with open(liftover_gff_path, "r") as infile:
-             for line in infile:
-                  if line.startswith('#'): continue
-                  cols = line.strip().split('\t')
-                  if len(cols) < 9 or cols[2] != 'gene': continue
+            for line in infile:
+                if line.startswith('#'): continue
+                cols = line.strip().split('\t')
+                if len(cols) < 9 or cols[2] != 'gene': continue
 
-                  attributes = {k: v for k, v in (pair.split('=', 1) for pair in cols[8].split(';') if '=' in pair)}
-                  geneid = attributes.get('ID')
-                  if not geneid: continue
+                attributes = {k: v for k, v in (pair.split('=', 1) for pair in cols[8].split(';') if '=' in pair)}
+                geneid = attributes.get('ID')
+                if not geneid: continue
 
-                  try:
-                      cover = float(attributes.get('coverage', 0))
-                      sid = float(attributes.get('sequence_ID', 0))
-                      liftover_quality_scores[geneid] = {'coverage': cover, 'sequence_ID': sid}
-                  except (ValueError, TypeError):
-                      logging.warning(f"Could not parse quality scores for gene {geneid} in {liftover_gff_path}. Skipping quality check for this gene.")
-                      liftover_quality_scores[geneid] = {'coverage': 0, 'sequence_ID': 0} # Assign default low scores
+                try:
+                    cover = float(attributes.get('coverage', 0))
+                    sid = float(attributes.get('sequence_ID', 0))
+                    liftover_quality_scores[geneid] = {'coverage': cover, 'sequence_ID': sid}
+                except (ValueError, TypeError):
+                    logging.warning(f"Could not parse quality scores for gene {geneid} in {liftover_gff_path}. Skipping quality check for this gene.")
+                    liftover_quality_scores[geneid] = {'coverage': 0, 'sequence_ID': 0} # Assign default low scores
 
     except FileNotFoundError:
-         # If liftover GFF doesn't exist, no genes can pass quality checks
-         logging.warning(f"Original liftover GFF file not found: {liftover_gff_path}. No genes will pass quality filters.")
-         # Proceed, but keepers will remain empty.
+        # If liftover GFF doesn't exist, no genes can pass quality checks
+        logging.warning(f"Original liftover GFF file not found: {liftover_gff_path}. No genes will pass quality filters.")
+        # Proceed, but keepers will remain empty.
     except Exception as e:
-         logging.error(f"Error reading liftover GFF for quality scores {liftover_gff_path}: {e}")
-         # Proceed cautiously, quality checks might be incomplete
-         pass
+        logging.error(f"Error reading liftover GFF for quality scores {liftover_gff_path}: {e}")
+        # Proceed cautiously, quality checks might be incomplete
+        pass
 
 
     # --- Determine Keepers based on Comparison Data and Quality Scores ---
@@ -340,7 +340,7 @@ def filter_gff_by_quality(alt_genome_id, ref_genome_id, liftover_gff_path, pos_c
                 # Fallback string comparison
                 chrom_match = (alt_chrom_str == ref_chrom_str)
                 if not chrom_match:
-                     logging.debug(f"Chromosome number extraction failed or mismatch for {geneid}: Ref='{ref_chrom_str}', Alt='{alt_chrom_str}'")
+                    logging.debug(f"Chromosome number extraction failed or mismatch for {geneid}: Ref='{ref_chrom_str}', Alt='{alt_chrom_str}'")
 
 
             # Apply filters
@@ -398,12 +398,12 @@ def filter_gff_by_quality(alt_genome_id, ref_genome_id, liftover_gff_path, pos_c
                     # Feature type is not gene or child of a kept gene
                     pass
     except FileNotFoundError:
-         logging.warning(f"Original liftover GFF {liftover_gff_path} not found. Filtered alternative GFF will be empty.")
-         # Create empty file
-         open(output_alt_gff_path, 'w').close()
+        logging.warning(f"Original liftover GFF {liftover_gff_path} not found. Filtered alternative GFF will be empty.")
+        # Create empty file
+        open(output_alt_gff_path, 'w').close()
     except Exception as e:
-         logging.error(f"Error writing filtered alternative GFF {output_alt_gff_path}: {e}")
-         sys.exit(1)
+        logging.error(f"Error writing filtered alternative GFF {output_alt_gff_path}: {e}")
+        sys.exit(1)
 
 
     # --- Filter Original Reference GFF ---
