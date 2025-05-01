@@ -157,33 +157,69 @@ def main(args):
         original_file_path = os.path.join(input_dir, file) # Store original path for logging
         file_path = original_file_path # Start with the original path
         decompressed_successfully = True # Flag to track decompression status
+        output_dir_path = os.path.dirname(file_path) # Directory where output file will be written
 
         if file_path.endswith('.gz'):
             decompressed_path = file_path.replace('.gz', '')
+
+            # --- Permission Check ---
+            can_read_gz = os.access(file_path, os.R_OK)
+            can_write_here = os.access(output_dir_path, os.W_OK)
+
+            if not can_read_gz:
+                logging.error(f"Permission denied: Cannot read input file {file_path}. Skipping.")
+                decompressed_successfully = False
+                continue
+            if not can_write_here:
+                logging.error(f"Permission denied: Cannot write to directory {output_dir_path} for decompression. Skipping {file_path}.")
+                decompressed_successfully = False
+                continue
+            # --- End Permission Check ---
+
             # Use gunzip -k to keep the original file, which is safer
-            # Capture output to check for errors
+            # Use Python 3.6 compatible arguments for subprocess.run
             cmd_gunzip = f"gunzip -kf {file_path}" # -k: keep, -f: force overwrite (if .fq exists)
             logging.info(f"Attempting to decompress: {file_path}")
-            result = subprocess.run(cmd_gunzip, shell=True, executable='/bin/bash', capture_output=True, text=True)
+            try:
+                result = subprocess.run(
+                    cmd_gunzip,
+                    shell=True,
+                    executable='/bin/bash',
+                    stdout=subprocess.PIPE, # Python 3.6 equivalent of capture_output=True
+                    stderr=subprocess.PIPE, # Python 3.6 equivalent of capture_output=True
+                    universal_newlines=True # Python 3.6 equivalent of text=True
+                )
 
-            if result.returncode == 0:
-                logging.info(f"Successfully decompressed {file_path} to {decompressed_path}")
-                file_path = decompressed_path # Update file_path ONLY on success
-            else:
-                logging.error(f"Failed to decompress {file_path}. Return code: {result.returncode}")
-                if result.stderr:
-                    logging.error(f"Stderr: {result.stderr.strip()}")
-                if result.stdout:
-                    logging.error(f"Stdout: {result.stdout.strip()}")
-                logging.warning(f"Skipping file {original_file_path} due to decompression error.")
-                decompressed_successfully = False
-                continue # Skip to the next file in the loop
+                if result.returncode == 0:
+                    # Check if the decompressed file actually exists now
+                    if os.path.exists(decompressed_path):
+                        logging.info(f"Successfully decompressed {file_path} to {decompressed_path}")
+                        file_path = decompressed_path # Update file_path ONLY on success
+                    else:
+                        # This might happen if gunzip -f overwrites but then fails, or other edge cases
+                        logging.error(f"gunzip command succeeded but output file {decompressed_path} not found. Skipping {original_file_path}.")
+                        decompressed_successfully = False
+                        continue
+                else:
+                    logging.error(f"Failed to decompress {file_path}. Return code: {result.returncode}")
+                    if result.stderr:
+                        logging.error(f"Stderr: {result.stderr.strip()}")
+                    if result.stdout: # Log stdout too, might contain info
+                        logging.error(f"Stdout: {result.stdout.strip()}")
+                    logging.warning(f"Skipping file {original_file_path} due to decompression error.")
+                    decompressed_successfully = False
+                    continue # Skip to the next file in the loop
+            except Exception as e:
+                 logging.error(f"An unexpected error occurred during gunzip subprocess for {file_path}: {e}")
+                 decompressed_successfully = False
+                 continue
+
 
         # Proceed only if decompression was successful (or not needed)
         if decompressed_successfully:
             # Checking that the file includes the fastq extension
             # If not, rename the file on the fly to include the .fastq extension and modify the file_path
-            
+
             # There could be instances where the file extension is fq. Given that upstream fastq is expected,
             # we will rename the file to fastq
 
@@ -194,6 +230,10 @@ def main(args):
                     continue
                 new_file_path = file_path.replace('.fq', '.fastq')
                 try:
+                    # Check write permissions in the directory before renaming
+                    if not os.access(os.path.dirname(file_path), os.W_OK):
+                         logging.error(f"Permission denied: Cannot rename file in directory {os.path.dirname(file_path)}. Skipping {original_file_path}.")
+                         continue
                     logging.info(f"Renaming {file_path} to {new_file_path}")
                     os.rename(file_path, new_file_path)
                     file_path = new_file_path # Update file_path after successful rename
@@ -201,7 +241,7 @@ def main(args):
                     logging.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
                     logging.warning(f"Skipping file {original_file_path} due to renaming error.")
                     continue
-            
+
             if not file_path.endswith('.fastq'):
                 # Check if the target file exists before attempting rename
                 if not os.path.exists(file_path):
@@ -210,6 +250,10 @@ def main(args):
 
                 new_file_path = file_path + '.fastq'
                 try:
+                    # Check write permissions in the directory before renaming
+                    if not os.access(os.path.dirname(file_path), os.W_OK):
+                         logging.error(f"Permission denied: Cannot rename file in directory {os.path.dirname(file_path)}. Skipping {original_file_path}.")
+                         continue
                     logging.info(f"Renaming {file_path} to {new_file_path}")
                     os.rename(file_path, new_file_path)
                     file_path = new_file_path # Update file_path after successful rename
