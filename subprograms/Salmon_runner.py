@@ -154,29 +154,83 @@ def main(args):
         os.mkdir(job_dir)
 
     for file in tqdm(files, desc='Quantifying files', bar_format=tqdm_format):
-        file_path = os.path.join(input_dir, file)
-        
+        original_file_path = os.path.join(input_dir, file) # Store original path for logging
+        file_path = original_file_path # Start with the original path
+        decompressed_successfully = True # Flag to track decompression status
+
         if file_path.endswith('.gz'):
-            # Decompress the file
-            cmd_gunzip = f"gunzip {file_path}"
-            subprocess.run(cmd_gunzip, shell=True, executable='/bin/bash')
-            file_path = file_path.replace('.gz', '')
-        
-        # Checking that the file includes the fastq extension
-        # If not, rename the file on the fly to include the .fastq extension and modify the file_path
-        # NOTE: Only fastq files are accepted
+            decompressed_path = file_path.replace('.gz', '')
+            # Use gunzip -k to keep the original file, which is safer
+            # Capture output to check for errors
+            cmd_gunzip = f"gunzip -kf {file_path}" # -k: keep, -f: force overwrite (if .fq exists)
+            logging.info(f"Attempting to decompress: {file_path}")
+            result = subprocess.run(cmd_gunzip, shell=True, executable='/bin/bash', capture_output=True, text=True)
 
-        if not file_path.endswith('.fastq'):
-            new_file_path = file_path + '.fastq'
-            os.rename(file_path, new_file_path)
-            file_path = new_file_path
+            if result.returncode == 0:
+                logging.info(f"Successfully decompressed {file_path} to {decompressed_path}")
+                file_path = decompressed_path # Update file_path ONLY on success
+            else:
+                logging.error(f"Failed to decompress {file_path}. Return code: {result.returncode}")
+                if result.stderr:
+                    logging.error(f"Stderr: {result.stderr.strip()}")
+                if result.stdout:
+                    logging.error(f"Stdout: {result.stdout.strip()}")
+                logging.warning(f"Skipping file {original_file_path} due to decompression error.")
+                decompressed_successfully = False
+                continue # Skip to the next file in the loop
 
-        job = master_script_generator(file_path, working_directory, job_dir, output_dir, threads, memory,
-                                    os.path.join(temporal_directory, 'salmon_index'),
-                                    quant_options)
-        # Run the job
-        cmd_launcher = f"sbatch {job}"
-        subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
+        # Proceed only if decompression was successful (or not needed)
+        if decompressed_successfully:
+            # Checking that the file includes the fastq extension
+            # If not, rename the file on the fly to include the .fastq extension and modify the file_path
+            
+            # There could be instances where the file extension is fq. Given that upstream fastq is expected,
+            # we will rename the file to fastq
+
+            if file_path.endswith('.fq'):
+                # Check if the target file exists before attempting rename
+                if not os.path.exists(file_path):
+                    logging.error(f"File not found before renaming: {file_path}. This might be due to a prior error. Skipping.")
+                    continue
+                new_file_path = file_path.replace('.fq', '.fastq')
+                try:
+                    logging.info(f"Renaming {file_path} to {new_file_path}")
+                    os.rename(file_path, new_file_path)
+                    file_path = new_file_path # Update file_path after successful rename
+                except OSError as e:
+                    logging.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
+                    logging.warning(f"Skipping file {original_file_path} due to renaming error.")
+                    continue
+            
+            if not file_path.endswith('.fastq'):
+                # Check if the target file exists before attempting rename
+                if not os.path.exists(file_path):
+                    logging.error(f"File not found before renaming: {file_path}. This might be due to a prior error. Skipping.")
+                    continue # Skip to the next file
+
+                new_file_path = file_path + '.fastq'
+                try:
+                    logging.info(f"Renaming {file_path} to {new_file_path}")
+                    os.rename(file_path, new_file_path)
+                    file_path = new_file_path # Update file_path after successful rename
+                except OSError as e:
+                    logging.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
+                    logging.warning(f"Skipping file {original_file_path} due to renaming error.")
+                    continue # Skip to the next file
+
+            # Ensure the final file_path exists before generating the script
+            if not os.path.exists(file_path):
+                logging.error(f"Final file path {file_path} does not exist before generating job script. Skipping.")
+                continue
+
+            job = master_script_generator(file_path, working_directory, job_dir, output_dir, threads, memory,
+                                        os.path.join(temporal_directory, 'salmon_index'),
+                                        quant_options)
+            # Run the job
+            cmd_launcher = f"sbatch {job}"
+            logging.info(f"Submitting job: {cmd_launcher}")
+            subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
+        # else: Decompression failed, already logged and skipped
 
     # Cleaning all the files and temporal directories
     if clean:
