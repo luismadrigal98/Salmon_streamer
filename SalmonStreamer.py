@@ -41,12 +41,12 @@ def main():
                                         help='Path to the liftoff executable')
     ann_transfer_parser.add_argument('--minimap_path', required=False, default='~/.conda/envs/salmon/bin/minimap2',
                                         help='Path to the minimap2 executable')
-    ann_transfer_parser.add_argument('--mm2_options', default='="-a --eqx -N 50 -p 0.5"', help='Options for minimap2') # Note that the '=' is necessary for the default value to be parsed correctly
+    #ann_transfer_parser.add_argument('--mm2_options', default='="-a --eqx -N 50 -p 0.5"', help='Options for minimap2')  # THIS IS BROKEN IN LIFTOFF. THERE IS NO WAY OF PARSING THE OPTIONS
 
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
     
-    # Global arguments for run
+    # Global arguments for runNote
     global_group = run_parser.add_argument_group('Global arguments', 'Directory and path settings')
     global_group.add_argument('-i', '--input', required=True, help='Directory with the fastq files')
     global_group.add_argument('--transcriptome', '--tf', required=True, help='Transcriptome in fasta format')

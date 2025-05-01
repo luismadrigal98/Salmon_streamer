@@ -64,7 +64,7 @@ def main(args):
     # Executables - Expand user paths here
     liftoff_path = os.path.expanduser(args.liftoff_path)
     minimap_path = os.path.expanduser(args.minimap_path)
-    mm2_options = args.mm2_options # This should contain the string like "-a --eqx ..."
+    # mm2_options = args.mm2_options # This should contain the string like "-a --eqx ..."
 
     output_dir = os.path.dirname(output)
 
@@ -95,7 +95,7 @@ def main(args):
         '-g', annotation_gff3,
         '-o', output,
         '-dir', intermediate_dir,
-        '-mm2_options', mm2_options, # Pass the string "-a --eqx ..." directly
+        #'-mm2_options', mm2_options, # Pass the string "-a --eqx ..." directly
         '-m', minimap_path,
         target,
         reference
