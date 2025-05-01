@@ -50,7 +50,6 @@ def main():
     trans_gen_parser.add_argument('--alt-genome-id', required=True, help="Identifier for the alternative genome (e.g., SWB)")
     trans_gen_parser.add_argument('--ref-genome-id', required=True, help="Identifier for the reference genome (e.g., IM767)")
     trans_gen_parser.add_argument('--liftover-gff', required=True, help="Input GFF from AnnTransfer subcommand")
-    trans_gen_parser.add_argument('--ref-gene-pos', required=True, help="Reference gene positions file (tab-separated: chr, start, end, strand, gene_id)")
     trans_gen_parser.add_argument('--original-ref-gff', required=True, help="Original reference GFF file used for AnnTransfer")
     trans_gen_parser.add_argument('--alt-genome-fasta', required=True, help="Alternative (target) genome FASTA file")
     trans_gen_parser.add_argument('--ref-genome-fasta', required=True, help="Reference genome FASTA file")
