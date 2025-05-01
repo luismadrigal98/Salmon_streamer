@@ -87,17 +87,47 @@ def main(args):
         logging.info('Creating the intermediate directory')
         os.makedirs(intermediate_dir, exist_ok=True)
 
-    # Building the liftoff command
-    cmd = f"{liftoff_path} -g {annotation_gff3} -o {output} -dir {intermediate_dir} " + \
-            f"-mm2_options '{mm2_options}' -m {minimap_path} {target} {reference}"
-    
-    # Run the command
-    logging.info(f"Running liftoff command: {cmd}")
-    subprocess.run(cmd, shell=True, executable='/bin/bash')
+    # Building the liftoff command as a list for shell=False
+    cmd_list = [
+        liftoff_path,
+        '-g', annotation_gff3,
+        '-o', output,
+        '-dir', intermediate_dir,
+        '-mm2_options', mm2_options,
+        '-m', minimap_path,
+        target,
+        reference
+    ]
 
-    # Check if the command was successful
-    if subprocess.run(cmd, shell=True, executable='/bin/bash').returncode != 0:
-        logging.error('Liftoff failed')
-        sys.exit(1)
-    else:
+    # Run the command and capture the result
+    # Use shell=False (default) and pass the command as a list
+    logging.info(f"Running liftoff command: {' '.join(cmd_list)}")
+    try:
+        # Use check=True to automatically raise an error for non-zero exit codes
+        # Capture stdout and stderr for logging
+        result = subprocess.run(cmd_list, check=True, capture_output=True, text=True, executable=None) # executable=None when shell=False
         logging.info("Liftoff finished successfully")
+        # Log stdout and stderr even on success (might contain warnings)
+        if result.stdout:
+            logging.info("Liftoff stdout:\n" + result.stdout)
+        if result.stderr:
+            logging.warning("Liftoff stderr:\n" + result.stderr)
+
+    except subprocess.CalledProcessError as e:
+        # Log detailed error information if liftoff fails
+        logging.error('Liftoff failed')
+        logging.error(f"Command: {' '.join(e.cmd)}")
+        logging.error(f"Return code: {e.returncode}")
+        if e.stdout:
+            logging.error("stdout:\n" + e.stdout)
+        if e.stderr:
+            logging.error("stderr:\n" + e.stderr)
+        sys.exit(1)
+    except FileNotFoundError:
+        # Handle case where liftoff executable itself is not found
+        logging.error(f"Liftoff executable not found at: {liftoff_path}")
+        sys.exit(1)
+    except Exception as e:
+        # Catch any other unexpected errors during subprocess execution
+        logging.error(f"An unexpected error occurred while running liftoff: {e}")
+        sys.exit(1)
