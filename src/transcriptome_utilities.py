@@ -278,7 +278,7 @@ def filter_gff_by_quality(alt_genome_id, liftover_gff_path, ref_gene_pos_path, o
     if kept_ref_count != len(keepers):
         logging.warning(f"Mismatch between keepers ({len(keepers)}) and genes written to ref GFF ({kept_ref_count})")
 
-def extract_gene_sequences(alt_genome_id, alt_genome_fasta_path, ref_genome_fasta_path,
+def extract_gene_sequences(alt_genome_id, ref_genome_id, alt_genome_fasta_path, ref_genome_fasta_path,
                             filtered_alt_gff_path, filtered_ref_gff_path, output_fasta_path):
     """
     Extracts gene sequences based on filtered GFF files and combines them.
@@ -365,7 +365,7 @@ def extract_gene_sequences(alt_genome_id, alt_genome_fasta_path, ref_genome_fast
                                     complement = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C', 'N': 'N'}
                                     seq = "".join(complement.get(base, 'N') for base in reversed(seq.upper()))
 
-                                outfile.write(f">IM767_{gene_id}\n") # Assuming reference prefix is IM767
+                                outfile.write(f">{ref_genome_id}_{gene_id}\n") # Use ref_genome_id here
                                 # Write sequence in lines of 60 characters
                                 for i in range(0, len(seq), 60):
                                     outfile.write(seq[i:i+60] + '\n')

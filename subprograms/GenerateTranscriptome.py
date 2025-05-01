@@ -14,6 +14,11 @@ import logging
 import os
 import sys
 
+# Add the parent directory to sys.path to allow imports from sibling directories
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from src.transcriptome_utilities import *
+
 ## Setting up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -64,7 +69,7 @@ def main(args):
 
     # --- Step 3: Extract Sequences ---
     try:
-        extract_gene_sequences(alt_genome_id, alt_genome_fasta, ref_genome_fasta,
+        extract_gene_sequences(alt_genome_id, ref_genome_id, alt_genome_fasta, ref_genome_fasta,
                                 filtered_alt_gff, filtered_ref_gff, final_output_fasta_path)
     except Exception as e:
         logging.error(f"Failed during sequence extraction: {e}")
