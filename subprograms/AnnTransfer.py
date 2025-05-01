@@ -104,8 +104,9 @@ def main(args):
     logging.info(f"Running liftoff command: {' '.join(cmd_list)}")
     try:
         # Use check=True to automatically raise an error for non-zero exit codes
-        # Capture stdout and stderr for logging
-        result = subprocess.run(cmd_list, check=True, capture_output=True, text=True, executable=None) # executable=None when shell=False
+        # Use stdout=subprocess.PIPE, stderr=subprocess.PIPE for Python < 3.7
+        # Use universal_newlines=True instead of text=True for Python < 3.7
+        result = subprocess.run(cmd_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, executable=None)
         logging.info("Liftoff finished successfully")
         # Log stdout and stderr even on success (might contain warnings)
         if result.stdout:
@@ -118,6 +119,7 @@ def main(args):
         logging.error('Liftoff failed')
         logging.error(f"Command: {' '.join(e.cmd)}")
         logging.error(f"Return code: {e.returncode}")
+        # Access stdout/stderr from the exception object
         if e.stdout:
             logging.error("stdout:\n" + e.stdout)
         if e.stderr:
