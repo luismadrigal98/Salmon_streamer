@@ -23,6 +23,7 @@ from subprograms.Salmon_output_processor import main as process_salmon_out_main
 from subprograms.voom_from_salmon import main as voom_main
 from subprograms.AnnTransfer import main as ann_transfer_main
 from subprograms.GenerateTranscriptome import main as generate_transcriptome
+from subprograms.RunPCA import main as run_pca_qc_main
 
 def main():
     # Create the main parser
@@ -109,6 +110,17 @@ def main():
     process_parser.add_argument('--includes_alternative_genome', action='store_true', 
                             help='If True, the alternative genome was included in the analysis.')
     
+    # --- PCA Based QC Subcommand ---
+    pca_qc_parser = subparsers.add_parser('PCA_QC', help='Perform PCA based quality control on expression data using an R script.')
+    pca_qc_parser.add_argument('--input-data', required=True, help="Path to the input data file (e.g., combined counts table).")
+    pca_qc_parser.add_argument('--label-rules-file', required=True, help="Path to a JSON file defining label grouping rules for 'Source' and 'Group' categorization.")
+    pca_qc_parser.add_argument('--iqr-multiplier', type=float, default=1.5, help="Multiplier for IQR outlier detection (default: 1.5).")
+    pca_qc_parser.add_argument('--output-filtered-data-name', required=True, help="Filename for the output filtered data table (e.g., 'filtered_counts.tsv').")
+    pca_qc_parser.add_argument('--genes-as-rows', action='store_true', help="If set, transpose final filtered data to have genes as rows.")
+    pca_qc_parser.add_argument('--output-dir', required=True, help="Directory to save output plots and the filtered data file.")
+    pca_qc_parser.add_argument('--pc-to-retain', type=int, default=5, help="Number of principal components to retain for analysis (default: 5).")
+    pca_qc_parser.add_argument('--rscript-executable', default='~/.conda/envs/PyR/bin/Rscript', help="Path to the Rscript executable (default: Rscript).")
+
     # Create the voom subcommand parser (from voom_from_salmon.py)
     voom_parser = subparsers.add_parser('Voom', help='Preprocess Salmon output for voom analysis')
     # Add arguments for voom analysis as needed
@@ -128,6 +140,8 @@ def main():
         run_salmon_main(args)
     elif args.command == 'ProcessSalmonOut':
         process_salmon_out_main(args)
+    elif args.command == 'PCA_QC':
+        run_pca_qc_main(args)
     elif args.command == 'Voom':
         voom_main()
     else:

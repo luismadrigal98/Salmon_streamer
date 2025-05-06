@@ -1,0 +1,13 @@
+{
+    "color_rules": {
+      "SF_Parental": "SFcross.*_.*P",
+      "SWB_Parental": "SWBcross.*_.*P",
+      "SF_Cross": "^SFcross",
+      "SWB_Cross": "^SWBcross"
+    },
+    "group_rules": {
+      "D": "_D.",
+      "J": "_J.",
+      "767": "_767."
+    }
+  }
