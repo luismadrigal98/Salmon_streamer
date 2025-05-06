@@ -13,9 +13,20 @@ PCA_plotter <- function(PCA_data, x = 'PC1', y = 'PC2', color = NULL,
   #' @return None
   #' ___________________________________________________________________________
   
-  p <- ggplot(data = PCA_data, mapping = aes(x = .data[[x]], y = .data[[y]])) +
-    geom_point(aes(color = .data[[color]], shape = .data[[group]]), size = 3) +
-    theme_bw() +
+  p <- ggplot(data = PCA_data, mapping = aes(x = .data[[x]], y = .data[[y]]))
+  
+  # Add points with conditional aesthetics
+  if (!is.null(color) && !is.null(group)) {
+    p <- p + geom_point(aes(color = .data[[color]], shape = .data[[group]]), size = 3)
+  } else if (!is.null(color)) { # Only color is specified
+    p <- p + geom_point(aes(color = .data[[color]]), size = 3)
+  } else if (!is.null(group)) { # Only group (for shape) is specified
+    p <- p + geom_point(aes(shape = .data[[group]]), size = 3)
+  } else { # Neither color nor group is specified
+    p <- p + geom_point(size = 3)
+  }
+  
+  p <- p + theme_bw() +
     labs(title = "PCA Plot", x = x, y = y) +
     theme(legend.position = "right",
           panel.grid = element_blank(),

@@ -97,14 +97,38 @@ PCA_plotter(PCA_data, x = 'PC1', y = 'PC3', color = 'Source',
             group = 'Group', filename = "./Results/Plots/PCA_1_vs_3.pdf")
 
 # ******************************************************************************
-# 4) QC based on clustering ----
+# 4) Outlier removal ----
 # ______________________________________________________________________________
 
 # 4.1) Preserve observations as a function of absolute deviation from the mean ----
 
 # Merge the two grouping variables
 
-PCA_data$Group_merged <- paste0(PCA_data$Source, "_", PCA_data$Group)
+PCA_data$Group_merged <- paste0(PCA_data$Source, "_", PCA_data$Group) |>
+  as.factor()
 
 PCA_data <- PCA_data |> dplyr::group_by(Group_merged) |>
-  dplyr::filter(!abs(value - mean(value) > 2 * sd(value)))
+  dplyr::filter(!(abs(value - median(value)) > 2 * sd(value)))
+
+# 4.2) Removal of the outliers ---
+
+PCA_data_filtered_iqr <- PCA_data |>
+  dplyr::group_by(Group_merged) |>
+  dplyr::filter(
+    dplyr::if_all(
+      .cols = dplyr::starts_with("PC"), # Selects all PCs
+      .fns = ~ mark_outliers_IQR(.)    # Apply the IQR non-outlier check
+    )
+  ) |>
+  dplyr::ungroup()
+
+# 4.3) Replot the PCRs ----
+
+PCA_plotter(PCA_data_filtered_iqr, x = 'PC1', y = 'PC2', color = 'Group_merged',
+            filename = "./Results/Plots/PCA_1_vs_2_filtered.pdf")
+
+PCA_plotter(PCA_data_filtered_iqr, x = 'PC2', y = 'PC3', color = 'Group_merged', 
+            filename = "./Results/Plots/PCA_2_vs_3_filtered.pdf")
+
+PCA_plotter(PCA_data_filtered_iqr, x = 'PC1', y = 'PC3', color = 'Group_merged', 
+            filename = "./Results/Plots/PCA_1_vs_3_filtered.pdf")
