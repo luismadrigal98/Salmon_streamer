@@ -58,7 +58,7 @@ names(Data) <- traits
 # 3) Perform the PCA analysis ----
 # ______________________________________________________________________________
 
-PCA_res <- prcomp(x = Data, center = T, scale = F)
+PCA_res <- prcomp(x = Data, center = T, scale = T)
 
 PCA_data <- process_PCA_results(PCA_res, 5) # This should also return the composite variance
 
@@ -77,36 +77,27 @@ group_grouping_rules <- list("D" = "_D.",
 
 PCA_data$Source <- assign_groups_from_labels(default_group = 'Unknown',
                                             rules = color_grouping_rules,
-                                            labels = rownames(PCA_data))
+                                            labels = rownames(PCA_data)) |>
+  as.factor()
 
 PCA_data$Group <- assign_groups_from_labels(default_group = 'Unknown',
                                             rules = group_grouping_rules,
-                                            labels = rownames(PCA_data))
+                                            labels = rownames(PCA_data)) |>
+  as.factor()
 
-# Visual exploration (multipanel scatterplot, all vs all)
+# Visual exploration before QC
 
-pairs_plot <- ggpairs(
-  PCA_data,
-  columns = 1:5, # Specify that only PC1-PC5 should form the axes of the pairs
-  title = "Scatterplot Matrix of Principal Components",
-  upper = list(continuous = wrap("points", mapping = aes(color = Group), 
-                                 alpha = 0.5, size = 0.8)), # Map 'Group' column to color
-  lower = list(continuous = wrap("points", mapping = aes(color = Source), 
-                                 alpha = 0.5, size = 0.8)), # Map 'Source' column to color
-  diag = list(continuous = wrap("densityDiag", mapping = aes(fill = Group), 
-                                alpha = 0.5)) # Optionally color diagonal by Group as well
-) +
-  theme_bw() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    axis.text = element_text(color = 'black'),
-    panel.grid = element_blank()
-  )
+PCA_plotter(PCA_data, x = 'PC1', y = 'PC2', color = 'Source',
+            group = 'Group', filename = "./Results/Plots/PCA_1_vs_2.pdf")
 
-# Ensure the directory exists before saving
-plots_dir <- "./Results/Plots/"
-if (!dir.exists(plots_dir)) {
-  dir.create(plots_dir, recursive = TRUE)
-}
+PCA_plotter(PCA_data, x = 'PC2', y = 'PC3', color = 'Source',
+            group = 'Group', filename = "./Results/Plots/PCA_2_vs_3.pdf")
 
-ggsave(paste0(plots_dir, 'PCA_screenen_before_QC.pdf'), plot = pairs_plot, width = 12, height = 12)
+PCA_plotter(PCA_data, x = 'PC1', y = 'PC3', color = 'Source',
+            group = 'Group', filename = "./Results/Plots/PCA_1_vs_3.pdf")
+
+# ******************************************************************************
+# 4) QC based on clustering ----
+# ______________________________________________________________________________
+
+# 4.1) 
