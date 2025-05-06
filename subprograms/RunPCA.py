@@ -18,16 +18,26 @@ logging.basicConfig(
 
 def main(args):
     # Construct the command to run the R script
-    # Ensure the path to PCA_based_QC.R is correct relative to SalmonStreamer.py
-    # For simplicity, assuming SalmonStreamer.py is run from the project root.
-    r_script_path = os.path.join(os.path.dirname(__file__), 'subprograms/PCA_based_QC.R')
+    # PCA_based_QC.R is in the same directory as this RunPCA.py script
+    r_script_path = os.path.join(os.path.dirname(__file__), 'PCA_based_QC.R')
     if not os.path.exists(r_script_path):
-        logging.error(f"R script PCA_based_QC.R not found at expected locations.")
-        sys.exit(1)
+        # Fallback if the script is not found, though the above should be correct
+        logging.error(f"R script PCA_based_QC.R not found at {r_script_path}.")
+        # Attempt path relative to project root if SalmonStreamer.py is in root
+        # This part might be redundant if the first path is correct.
+        alt_r_script_path = os.path.join("subprograms", "PCA_based_QC.R")
+        if os.path.exists(alt_r_script_path):
+            r_script_path = alt_r_script_path
+            logging.info(f"Found R script at alternative path: {r_script_path}")
+        else:
+            logging.error(f"R script PCA_based_QC.R not found at expected locations.")
+            sys.exit(1)
+
+    r_script_executable_path = os.path.expanduser(args.rscript_executable)
 
 # Prepare arguments for the R script
     r_args = [
-        args.rscript_executable,
+        r_script_executable_path,
         r_script_path,
         args.input_data,
         args.label_rules_file,
