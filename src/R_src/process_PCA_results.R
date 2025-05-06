@@ -24,5 +24,5 @@ process_PCA_results <- function(PCA_res, PC_to_retain)
   message(paste0("With ", PC_to_retain, "PCs, you capture ", PCA_summary * 100, 
                  "% of the variance."))
   
-  return(PCA_data)
+  return(as.data.frame(PCA_data))
 }
