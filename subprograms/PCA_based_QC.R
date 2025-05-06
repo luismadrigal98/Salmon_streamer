@@ -100,4 +100,11 @@ PCA_plotter(PCA_data, x = 'PC1', y = 'PC3', color = 'Source',
 # 4) QC based on clustering ----
 # ______________________________________________________________________________
 
-# 4.1) 
+# 4.1) Preserve observations as a function of absolute deviation from the mean ----
+
+# Merge the two grouping variables
+
+PCA_data$Group_merged <- paste0(PCA_data$Source, "_", PCA_data$Group)
+
+PCA_data <- PCA_data |> dplyr::group_by(Group_merged) |>
+  dplyr::filter(!abs(value - mean(value) > 2 * sd(value)))
