@@ -20,8 +20,16 @@ args <- commandArgs(trailingOnly = TRUE)
 
 # 1.1) Source required scripts ----
 
-R_src_dir <- '.' # PLACEHOLDER: Set this to the actual path where your R scripts are located
+script_dir <- tryCatch(dirname(sys.frame(1)$ofile), error = function(e) ".") # Fallback for non-sourced execution
+R_src_dir <- file.path(script_dir, "..", "src", "R_src") # Relative to PCA_based_QC.R
 
+if (!dir.exists(R_src_dir)) {
+    # Fallback if script_dir is not determined correctly (e.g. when run from RStudio directly)
+    # This assumes the script is run from the project root if the above fails.
+    R_src_dir <- "./src/R_src"
+}
+
+message(paste("Sourcing R scripts from:", R_src_dir))
 for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
 {
   source(file)
@@ -29,5 +37,11 @@ for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
   rm(file)
 }
 
-required_packages <- c('assertthat', 'doFuture', 'ggplot2', 'dplyr',
-                       'GGally', 'tibble', 'jsonlite')
+required_packages <- c('qtl', 'dplyr')
+
+set_environment(parallel_backend = T, personal_seed = 1998, 
+                automatic_download = T, required_pckgs = required_packages)
+
+# ******************************************************************************
+# 2) Load the data ----
+# ______________________________________________________________________________
