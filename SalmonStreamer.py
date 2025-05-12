@@ -24,6 +24,7 @@ from subprograms.voom_from_salmon import main as voom_main
 from subprograms.AnnTransfer import main as ann_transfer_main
 from subprograms.GenerateTranscriptome import main as generate_transcriptome
 from subprograms.RunPCA import main as run_pca_qc_main
+from subprograms.QTL_runner import main as qtl_runner_main  # Add this import
 
 def main():
     # Create the main parser
@@ -127,6 +128,53 @@ def main():
 
     voom_parser.add_argument('-o', '--output', required=True, help='Directory with the output of the Salmon pipeline') # PLACEHOLDER
     
+    # --- Add QTL Runner Subcommand ---
+    qtl_parser = subparsers.add_parser('RunQTL', help='Run QTL analysis on expression data')
+    
+    # Required file paths
+    qtl_parser.add_argument('--r-script-path', required=True, 
+                          help="Path to eQTL_runner.R script")
+    qtl_parser.add_argument('--phenofile-path', required=True, 
+                          help="Path to phenotypes file (expression data)")
+    qtl_parser.add_argument('--genfile-path', required=True, 
+                          help="Path to genotypes file")
+    qtl_parser.add_argument('--outdir-base', required=True, 
+                          help="Base output directory for QTL results")
+    
+    # Optional analysis parameters
+    qtl_parser.add_argument('--covfile-path', required=False, 
+                          help="Path to covariates file (optional)")
+    qtl_parser.add_argument('--qtlmethod', default='mr',
+                          help="QTL mapping method to use in R/qtl (default: mr)")
+    qtl_parser.add_argument('--modeltype', default='normal',
+                          help="Model type for scanone (default: normal)")
+    qtl_parser.add_argument('--permnum', type=int, default=1000,
+                          help="Number of permutations for significance testing (default: 1000)")
+    qtl_parser.add_argument('--crosstype', default='f2',
+                          help="Cross type for R/qtl (default: f2)")
+    
+    # SLURM job settings
+    qtl_parser.add_argument('--rscript-executable', default='~/.conda/envs/PyR/bin/Rscript',
+                          help="Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript)")
+    qtl_parser.add_argument('--partition', default='sixhour,eeb,kucg,kelly',
+                          help="SLURM partition to use (default: sixhour,eeb,kucg,kelly)")
+    qtl_parser.add_argument('--nodes', type=int, default=1,
+                          help="Number of nodes per job (default: 1)")
+    qtl_parser.add_argument('--ntasks-per-node', type=int, default=1,
+                          help="Number of tasks per node (default: 1)")
+    qtl_parser.add_argument('--cpus-per-task', type=int, default=1,
+                          help="Number of CPUs per task (default: 1)")
+    qtl_parser.add_argument('--mem-per-cpu', default='4G',
+                          help="Memory per CPU (default: 4G)")
+    qtl_parser.add_argument('--time-limit', default='05:59:00',
+                          help="Time limit for jobs (default: 05:59:00)")
+    
+    # Job control parameters
+    qtl_parser.add_argument('--max-jobs', type=int, default=100,
+                          help="Maximum number of jobs to submit at once (default: 100)")
+    qtl_parser.add_argument('--job-submission-delay', type=float, default=0.5,
+                          help="Delay between job submissions in seconds (default: 0.5)")
+    
     # Parse arguments
     args = parser.parse_args()
     
@@ -143,7 +191,9 @@ def main():
     elif args.command == 'PCA_QC':
         run_pca_qc_main(args)
     elif args.command == 'Voom':
-        voom_main()
+        voom_main(args)
+    elif args.command == 'RunQTL':
+        qtl_runner_main(args)  # Call the QTL runner main function
     else:
         parser.print_help()
 
