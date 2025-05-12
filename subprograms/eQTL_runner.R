@@ -48,10 +48,15 @@ set_environment(parallel_backend = T, personal_seed = 1998,
 
 # 2.1) Import the genotype data ----
 geno_data <- read.table(file = '/home/l338m483/scratch/MG_SF_SWB_project/R_directory/eQTL_Data/62.rQTL.genotype.txt',
-                        header = T, sep = '\t', stringsAsFactors = F)
+                        header = T, sep = ',', stringsAsFactors = F)
 
 # 2.2) Import the phenotype data ----
 # Expression profiles per gene per sample
 
 pheno_data <- read.table(file = '/home/l338m483/scratch/MG_SF_SWB_project/R_directory/eQTL_Data/gene.group1_62.txt',
                           header = T, sep = '\t', stringsAsFactors = F)
+
+# ******************************************************************************
+# 2) Load the data ----
+# ______________________________________________________________________________
+
