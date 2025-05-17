@@ -361,11 +361,13 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # lodsAll file (every marker with effects)
   output_file_lodsAll <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lodsAll.txt"))
-  write.table(lods_all_with_effects, file=output_file_lodsAll, sep="\t", quote=FALSE, row.names=TRUE)
+  write.table(lods_all_with_effects, file=output_file_lodsAll, sep="\t", quote=FALSE, 
+              row.names=TRUE, col.names=c("marker", colnames(lods_all_with_effects)))
 
   # simpleLods file (top marker per chromosome)
   output_file_simpleLods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_simpleLods.txt"))
-  write.table(simple_lods, file=output_file_simpleLods, sep="\t", quote=FALSE, row.names=TRUE)
+  write.table(simple_lods, file=output_file_simpleLods, sep="\t", quote=FALSE, 
+              row.names=TRUE, col.names=c("marker", colnames(simple_lods)))
 
   # ci file (confidence intervals)
   if(exists("ci_results") && nrow(ci_results) > 0) {
@@ -375,7 +377,8 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # Regular lods file
   output_file_lods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lods.txt"))
-  write.table(scanone_result, file=output_file_lods, sep="\t", quote=FALSE, row.names=TRUE)
+  write.table(scanone_result, file=output_file_lods, sep="\t", quote=FALSE, 
+              row.names=TRUE, col.names=c("marker", colnames(scanone_result)))
 }
 
 # Combine all significant results (if any)
