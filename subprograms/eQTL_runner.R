@@ -10,35 +10,7 @@
 #' ___________________________________________________________________________________
 
 # ******************************************************************************
-# 1) Set up environment ----
-# ______________________________________________________________________________
-
-# 1.1) Source required scripts ----
-
-script_dir <- tryCatch(dirname(sys.frame(1)$ofile), error = function(e) ".") # Fallback for non-sourced execution
-R_src_dir <- file.path(script_dir, "..", "src", "R_src") # Relative to PCA_based_QC.R
-
-if (!dir.exists(R_src_dir)) {
-    # Fallback if script_dir is not determined correctly (e.g. when run from RStudio directly)
-    # This assumes the script is run from the project root if the above fails.
-    R_src_dir <- "./src/R_src"
-}
-
-message(paste("Sourcing R scripts from:", R_src_dir))
-for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
-{
-  source(file)
-  message(paste("Sourced:", file))
-  rm(file)
-}
-
-required_packages <- c('qtl', 'dplyr', 'argparse') # Added argparse
-
-set_environment(parallel_backend = T, personal_seed = 1998, 
-                automatic_download = T, required_pckgs = required_packages)
-
-# ******************************************************************************
-# 2) Define and Parse Command Line Arguments (using hardcoded for now) ----
+# 1) Define and Parse Command Line Arguments (using hardcoded for now) ----
 # ______________________________________________________________________________
 
 # --- Argument Parser Setup ---
@@ -61,9 +33,33 @@ parser$add_argument("--crosstype", type = "character", default = "f2",
                     help = "Cross type for read.cross (e.g., 'f2', 'bc', 'risib') [default: %(default)s]")
 parser$add_argument("--covfile_path", type = "character", required = FALSE, default = NULL,
                     help = "Path to the covariate file (optional, e.g., CSV)")
+parser$add_argument("--source_dir", type = "character", required = FALSE, default = NULL,
+                    help = "Directory containing the source scripts")
 
 # 2.1) Retrieve the arguments ----
 args <- parser$parse_args()
+
+# ******************************************************************************
+# 2) Set up environment ----
+# ______________________________________________________________________________
+
+# 2.1) Source required scripts ----
+
+script_dir <- tryCatch(dirname(sys.frame(1)$ofile), error = function(e) ".") # Fallback for non-sourced execution
+R_src_dir <- args$source_dir
+
+message(paste("Sourcing R scripts from:", R_src_dir))
+for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
+{
+  source(file)
+  message(paste("Sourced:", file))
+  rm(file)
+}
+
+required_packages <- c('qtl', 'dplyr', 'argparse') # Added argparse
+
+set_environment(parallel_backend = T, personal_seed = 1998, 
+                automatic_download = T, required_pckgs = required_packages)
 
 if (!dir.exists(args$outdir)) {
   dir.create(args$outdir, recursive = TRUE)
