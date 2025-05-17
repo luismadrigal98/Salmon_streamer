@@ -324,9 +324,9 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   lods_all_with_effects_modified <- lods_all_with_effects_modified[, c("marker", 
                                    setdiff(colnames(lods_all_with_effects_modified), "marker"))]
 
-  # Write without row names (since they're now in the marker column)
-  write.table(lods_all_with_effects_modified, file=output_file_lodsAll, 
-              sep="\t", quote=FALSE, row.names=FALSE)
+  # lods_all_with_effects_modified was prepared earlier and includes the 'marker' column
+  write.table(lods_all_with_effects_modified, file=output_file_lodsAll, sep="\t", quote=FALSE, 
+              row.names=FALSE) # Use the modified dataframe and row.names=FALSE
 
   # 2. Get top marker per chromosome (for simpleLods) - fixed version
   simple_lods <- c()
