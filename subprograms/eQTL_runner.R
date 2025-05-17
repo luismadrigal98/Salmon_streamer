@@ -301,10 +301,10 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # 1. Calculate effects for all markers (for lodsAll file)
   message("Calculating QTL effects for all markers...")
+  # Create a separate effectscan call that doesn't pass method to plotting functions
   effects_all <- effectscan(mapthis, 
                            pheno.col = current_pheno_col,
-                           method = args$qtlmethod,
-                           addcovar = covariates_matrix)
+                           addcovar = covariates_matrix)  # Remove method parameter here
 
   # Combine LOD scores with effects
   lods_all_with_effects <- data.frame(
@@ -316,18 +316,35 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   )
   rownames(lods_all_with_effects) <- rownames(scanone_result)
 
-  # 2. Get top marker per chromosome (for simpleLods)
-  top_markers_by_chr <- find.marker(mapthis, chr=unique(scanone_result$chr), 
-                                    pos=pull.map(mapthis)[unique(scanone_result$chr)])
+  # 2. Get top marker per chromosome (for simpleLods) - fixed version
   simple_lods <- c()
   for(chr in unique(scanone_result$chr)) {
+    # Get all markers for this chromosome
     chr_markers <- scanone_result[scanone_result$chr == chr,]
-    top_marker <- chr_markers[which.max(chr_markers[,3]),]
-    simple_lods <- rbind(simple_lods, top_marker)
+    
+    if(nrow(chr_markers) > 0) {
+      # Find max LOD score for this chromosome
+      max_idx <- which.max(chr_markers[,3])
+      top_marker <- chr_markers[max_idx,]
+      
+      # Add threshold and other data
+      simple_lods <- rbind(simple_lods, top_marker)
+    }
   }
-  simple_lods$threshold <- lod_threshold_val
-  simple_lods$pvalue <- attr(summary(scanone_result, perms=perm_result, 
-                                     alpha=1), "pval")[rownames(simple_lods)]
+  
+  # Add threshold and p-values if we have any markers
+  if(length(simple_lods) > 0 && nrow(simple_lods) > 0) {
+    simple_lods$threshold <- lod_threshold_val
+    
+    # Calculate p-values from permutation results safely
+    pvals <- suppressWarnings(attr(summary(scanone_result, perms=perm_result, alpha=1), "pval"))
+    simple_lods$pvalue <- pvals[rownames(simple_lods)]
+  } else {
+    # Create empty simple_lods with the right structure
+    simple_lods <- data.frame(chr=character(), pos=numeric(), 
+                             lod=numeric(), threshold=numeric(), 
+                             pvalue=numeric())
+  }
 
   # 3. Calculate confidence intervals (for ci file)
   if(nrow(significant_qtls) > 0) {
