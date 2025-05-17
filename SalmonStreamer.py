@@ -132,8 +132,6 @@ def main():
     qtl_parser = subparsers.add_parser('RunQTL', help='Run QTL analysis on expression data')
     
     # Required file paths
-    qtl_parser.add_argument('--r-script-path', required=True, 
-                            help="Path to eQTL_runner.R script")
     qtl_parser.add_argument('--phenofile-path', required=True, 
                             help="Path to phenotypes file (expression data)")
     qtl_parser.add_argument('--genfile-path', required=True, 

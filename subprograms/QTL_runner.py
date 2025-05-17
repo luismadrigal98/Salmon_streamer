@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 def main(args):
     # Ensure R script path is absolute
-    r_script_full_path = os.path.abspath(args.r_script_path)
-    if not os.path.exists(r_script_full_path):
-        logger.error(f"R script not found at: {r_script_full_path}")
-        return
+    r_script_full_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'eQTL_runner.R'))
+
+    # Retrieve the sourcing directory for the R script
+    source_dir = os.path.join(os.path.dirname(__file__), '../src/R_src')
 
     gene_ids = get_gene_ids(args.phenofile_path)
     if not gene_ids:
@@ -74,7 +74,8 @@ def main(args):
             f"--qtlmethod={args.qtlmethod}",
             f"--modeltype={args.modeltype}",
             f"--permnum={args.permnum}",
-            f"--crosstype={args.crosstype}"
+            f"--crosstype={args.crosstype}",
+            f"--source_dir={source_dir}"
         ]
         if args.covfile_path:
             r_command_parts.append(f"--covfile_path={os.path.abspath(args.covfile_path)}")
