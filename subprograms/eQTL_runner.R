@@ -43,10 +43,15 @@ args <- parser$parse_args()
 # 2) Set up environment ----
 # ______________________________________________________________________________
 
-# 2.1) Source required scripts ----
+# 2.1) Load required packages ----
 
-script_dir <- tryCatch(dirname(sys.frame(1)$ofile), error = function(e) ".") # Fallback for non-sourced execution
 R_src_dir <- args$source_dir
+
+required_packages <- c('doParallel', 'qtl', 'dplyr', 'doFuture',
+                       'argparse')
+
+set_environment(parallel_backend = T, personal_seed = 1998, 
+                automatic_download = T, required_pckgs = required_packages)
 
 message(paste("Sourcing R scripts from:", R_src_dir))
 for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
@@ -55,11 +60,6 @@ for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
   message(paste("Sourced:", file))
   rm(file)
 }
-
-required_packages <- c('qtl', 'dplyr', 'argparse') # Added argparse
-
-set_environment(parallel_backend = T, personal_seed = 1998, 
-                automatic_download = T, required_pckgs = required_packages)
 
 if (!dir.exists(args$outdir)) {
   dir.create(args$outdir, recursive = TRUE)
@@ -218,23 +218,28 @@ if (!is.null(args$gene_id)) {
 all_results_list <- list()
 
 # Load covariates if you have them
-covariates_matrix <- NULL
-if (!is.null(args$covfile_path) && file.exists(args$covfile_path)) {
-  message(paste("Loading covariates from:", args$covfile_path))
-  cov_df <- read.csv(args$covfile_path, row.names = 1, check.names = FALSE) # Assuming first column is sample IDs
-  # Ensure sample order in covariates matches mapthis individuals
-  # This is crucial. Harmonize IDs if necessary (e.g. dots vs dashes)
-  # Example harmonization: rownames(cov_df) <- gsub("\\.", "-", rownames(cov_df))
-  # Then reorder:
-  # individuals_in_mapthis <- pull.ind(mapthis, type="all")
-  # if(!all(individuals_in_mapthis %in% rownames(cov_df))) {
-  #   stop("Not all individuals in mapthis found in covariate file. Check sample IDs.")
-  # }
-  # cov_df <- cov_df[individuals_in_mapthis, , drop = FALSE]
-  covariates_matrix <- as.matrix(cov_df)
-  message("Covariates loaded and formatted.")
+covariates_matrix <- NULL  # Default to NULL
+if (!is.null(args$covfile_path)) {
+  tryCatch({
+    if (file.exists(args$covfile_path)) {
+      message(paste("Loading covariates from:", args$covfile_path))
+      cov_df <- read.csv(args$covfile_path, row.names = 1, check.names = FALSE)
+      covariates_matrix <- as.matrix(cov_df)
+      message("Covariates loaded and formatted.")
+    } else {
+      message(paste("Covariate file not found:", args$covfile_path))
+    }
+  }, error = function(e) {
+    message(paste("Error loading covariates:", e$message))
+    covariates_matrix <<- NULL  # Ensure it's set to NULL on error
+  })
 } else {
-  message("No covariate file provided or found.")
+  message("No covariate file path provided.")
+}
+
+# Ensure covariates_matrix exists before entering the loop
+if (!exists("covariates_matrix")) {
+  covariates_matrix <- NULL
 }
 
 for (current_pheno_name in pheno_names_to_process) { # Modified loop
