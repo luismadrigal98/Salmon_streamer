@@ -37,7 +37,7 @@ for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
   rm(file)
 }
 
-required_packages <- c('qtl', 'dplyr', 'argparse') # Added argparse, qtl2 is not used in this path
+required_packages <- c('qtl', 'dplyr', 'argparse') # Added argparse
 
 set_environment(parallel_backend = T, personal_seed = 1998, 
                 automatic_download = T, required_pckgs = required_packages)
@@ -45,8 +45,6 @@ set_environment(parallel_backend = T, personal_seed = 1998,
 # ******************************************************************************
 # 2) Define and Parse Command Line Arguments (using hardcoded for now) ----
 # ______________________________________________________________________________
-# For now, we'll use the hardcoded paths you have.
-# Later, these should be replaced by command-line arguments.
 
 # --- Argument Parser Setup ---
 parser <- argparse::ArgumentParser(description = "Run eQTL analysis for specified genes using R/qtl")
@@ -66,33 +64,11 @@ parser$add_argument("--permnum", type = "integer", default = 1000,
                     help = "Number of permutations for significance testing [default: %(default)s]")
 parser$add_argument("--crosstype", type = "character", default = "f2",
                     help = "Cross type for read.cross (e.g., 'f2', 'bc', 'risib') [default: %(default)s]")
-# Add --covfile argument if you plan to use covariates
 parser$add_argument("--covfile_path", type = "character", required = FALSE, default = NULL,
                     help = "Path to the covariate file (optional, e.g., CSV)")
 
-
-# Check if running in an interactive session or sourced, vs. command line
-if (interactive() || !is.null(sys.frame(1)$ofile)) {
-    # Hardcoded for interactive testing if not run via Rscript with proper args
-    message("Running in interactive mode or sourced, using hardcoded default arguments for testing.")
-    args <- list(
-      genfile_path = '/home/l338m483/scratch/MG_SF_SWB_project/R_directory/eQTL_Data/62.rQTL.genotype.txt',
-      phenofile_path = '/home/l338m483/scratch/MG_SF_SWB_project/R_directory/eQTL_Data/gene.group1_62.txt',
-      outdir = "./eQTL_results_single_gene_test",
-      gene_id = NULL, # Set to a specific gene ID for single gene testing, e.g., "MgIM767.01G000100.v2.1"
-      qtlmethod = "mr",
-      modeltype = "normal",
-      permnum = 100, # Lower for testing
-      crosstype = "f2",
-      covfile_path = NULL
-    )
-} else {
-    # --- Get Command Line Arguments ---
-    # This line was at the top, moving it after parser definition
-    # args_cmd <- commandArgs(trailingOnly = TRUE) # This is for basic R, argparse handles it.
-    args <- parser$parse_args()
-}
-
+# 2.1) Retrieve the arguments ----
+args <- parser$parse_args()
 
 if (!dir.exists(args$outdir)) {
   dir.create(args$outdir, recursive = TRUE)
@@ -103,6 +79,7 @@ if (!dir.exists(args$outdir)) {
 # ______________________________________________________________________________
 
 # 3.1) Import the genotype data ----
+
 message("Loading genotype data from: ", args$genfile_path)
 geno_data_raw <- read.table(file = args$genfile_path,
                         header = T, sep = ',', stringsAsFactors = F, check.names = FALSE)
@@ -120,13 +97,16 @@ message("Phenotype data loaded. Dimensions: ", paste(dim(pheno_data_raw), collap
 # Ensure the first column name is suitable or explicitly handle it if needed.
 # For read.cross with format="csvs", the first column is implicitly the ID.
 # Let's rename the first column to 'id' for clarity, though R/qtl might not strictly require it.
+
 geno_for_qtl <- geno_data_raw
-# colnames(geno_for_qtl)[1] <- "id" # Optional: if the first col name is problematic
 
 # 3.4) Prepare phenotype data for R/qtl ----
+
 message("Transforming phenotype data...")
+
 # Gene IDs are in the first column, samples are in subsequent column headers
 # Transpose so that samples are rows and genes are columns
+
 pheno_transformed <- as.data.frame(t(pheno_data_raw[, -which(colnames(pheno_data_raw) == "geneid")]))
 colnames(pheno_transformed) <- pheno_data_raw$geneid
 
@@ -162,11 +142,13 @@ message(paste("Temporary phenotype CSV:", temp_pheno_file))
 # 4) Create R/qtl cross object ----
 # ______________________________________________________________________________
 message("Reading data into R/qtl cross object...")
+
 # Ensure your genotype codes are "A", "H", "B" for an F2 cross.
 # "A" and "B" are homozygous, "H" is heterozygous.
 # estimate.map=TRUE will use the positions in your file and try to re-estimate the map.
 # If your map is final, you might set estimate.map=FALSE.
 # The original scripts used estimate.map=T.
+
 cross_obj <- read.cross(format = "csvs",
                         dir = dirname(temp_geno_file), # or args$outdir
                         genfile = basename(temp_geno_file),
@@ -189,8 +171,10 @@ message("Temporary CSV files removed.")
 # ______________________________________________________________________________
 
 # 5.1) Initial map processing ----
+
 message("Processing genetic map...")
 mapthis <- jittermap(cross_obj) # Add small amount of noise to markers at same position
+
 # plotMap(mapthis) # Optional: visualize map
 
 # If estimate.map=TRUE was used in read.cross, the map is already estimated.
@@ -200,11 +184,14 @@ mapthis <- jittermap(cross_obj) # Add small amount of noise to markers at same p
 # mapthis <- replace.map(mapthis, newmap)
 
 # 5.2) Calculate genotype probabilities ----
+
 message("Calculating genotype probabilities...")
+
 mapthis <- calc.genoprob(mapthis,
                         step = 1, # Adjust step size as needed
                         error.prob = 0.001,
                         map.function = "kosambi") # Or other map function
+
 message("Genotype probabilities calculated.")
 
 # 5.3) Simulate genotypes (optional, for imputation or fine-mapping) ----
@@ -343,7 +330,8 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
     simple_lods <- rbind(simple_lods, top_marker)
   }
   simple_lods$threshold <- lod_threshold_val
-  simple_lods$pvalue <- attr(summary(scanone_result, perms=perm_result, alpha=1), "pval")[rownames(simple_lods)]
+  simple_lods$pvalue <- attr(summary(scanone_result, perms=perm_result, 
+                                     alpha=1), "pval")[rownames(simple_lods)]
 
   # 3. Calculate confidence intervals (for ci file)
   if(nrow(significant_qtls) > 0) {
