@@ -12,8 +12,6 @@
 # --- Get Command Line Arguments ---
 args <- commandArgs(trailingOnly = TRUE)
 
-# ARGUMENTS GO HERE
-
 # ******************************************************************************
 # 1) Set up environment ----
 # ______________________________________________________________________________
