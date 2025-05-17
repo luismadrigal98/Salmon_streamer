@@ -324,9 +324,13 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   lods_all_with_effects_modified <- lods_all_with_effects_modified[, c("marker", 
                                    setdiff(colnames(lods_all_with_effects_modified), "marker"))]
 
-  # lods_all_with_effects_modified was prepared earlier and includes the 'marker' column
+  # Define output file path for lodsAll before using it
+  safe_name <- gsub("[^a-zA-Z0-9_.-]", "_", current_pheno_name)
+  output_file_lodsAll <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lodsAll.txt"))
+
+  # Write to the output file
   write.table(lods_all_with_effects_modified, file=output_file_lodsAll, sep="\t", quote=FALSE, 
-              row.names=FALSE) # Use the modified dataframe and row.names=FALSE
+              row.names=FALSE)
 
   # 2. Get top marker per chromosome (for simpleLods) - fixed version
   simple_lods <- c()
@@ -382,11 +386,6 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # Save files with expected naming convention
   safe_name <- gsub("[^a-zA-Z0-9_.-]", "_", current_pheno_name)
-
-  # lodsAll file (every marker with effects)
-  output_file_lodsAll <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lodsAll.txt"))
-  write.table(lods_all_with_effects, file=output_file_lodsAll, sep="\t", quote=FALSE, 
-              row.names=TRUE, col.names=c("marker", colnames(lods_all_with_effects)))
 
   # simpleLods file (top marker per chromosome)
   output_file_simpleLods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_simpleLods.txt"))
