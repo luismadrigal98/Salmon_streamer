@@ -58,7 +58,7 @@ for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
 required_packages <- c('doParallel', 'qtl', 'dplyr', 'doFuture',
                        'argparse')
 
-set_environment(parallel_backend = T, personal_seed = 1998, 
+set_environment(parallel_backend = F, personal_seed = 1998, 
                 automatic_download = T, required_pckgs = required_packages)
 
 if (!dir.exists(args$outdir)) {
