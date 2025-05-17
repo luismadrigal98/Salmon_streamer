@@ -116,7 +116,8 @@ pheno_transformed$id <- rownames(pheno_transformed)
 pheno_transformed$id <- gsub("\\.", "-", pheno_transformed$id) # Replace dot with dash
 
 # Reorder to make 'id' the first column
-pheno_for_qtl <- pheno_transformed[, c("id", setdiff(names(pheno_transformed), "id"))]
+pheno_for_qtl <- pheno_transformed[, c("id", setdiff(names(pheno_transformed), "id"))] |>
+  dplyr::rename(ID = id)
 message("Phenotype data transformed.")
 
 # 3.5) Write data to temporary CSV files for read.cross ----
