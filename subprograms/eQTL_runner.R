@@ -47,12 +47,6 @@ args <- parser$parse_args()
 
 R_src_dir <- args$source_dir
 
-required_packages <- c('doParallel', 'qtl', 'dplyr', 'doFuture',
-                       'argparse')
-
-set_environment(parallel_backend = T, personal_seed = 1998, 
-                automatic_download = T, required_pckgs = required_packages)
-
 message(paste("Sourcing R scripts from:", R_src_dir))
 for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
 {
@@ -60,6 +54,12 @@ for(file in list.files(path = R_src_dir, full.names = TRUE, pattern = "\\.R$"))
   message(paste("Sourced:", file))
   rm(file)
 }
+
+required_packages <- c('doParallel', 'qtl', 'dplyr', 'doFuture',
+                       'argparse')
+
+set_environment(parallel_backend = T, personal_seed = 1998, 
+                automatic_download = T, required_pckgs = required_packages)
 
 if (!dir.exists(args$outdir)) {
   dir.create(args$outdir, recursive = TRUE)
