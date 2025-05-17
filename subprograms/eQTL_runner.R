@@ -316,6 +316,18 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   )
   rownames(lods_all_with_effects) <- rownames(scanone_result)
 
+  # Add the row names as a new column called "marker"
+  lods_all_with_effects_modified <- lods_all_with_effects
+  lods_all_with_effects_modified$marker <- rownames(lods_all_with_effects)
+
+  # Reorder columns to put marker first
+  lods_all_with_effects_modified <- lods_all_with_effects_modified[, c("marker", 
+                                   setdiff(colnames(lods_all_with_effects_modified), "marker"))]
+
+  # Write without row names (since they're now in the marker column)
+  write.table(lods_all_with_effects_modified, file=output_file_lodsAll, 
+              sep="\t", quote=FALSE, row.names=FALSE)
+
   # 2. Get top marker per chromosome (for simpleLods) - fixed version
   simple_lods <- c()
   for(chr in unique(scanone_result$chr)) {
@@ -346,6 +358,18 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
                              pvalue=numeric())
   }
 
+  # Add the row names as a new column called "marker"
+  simple_lods_modified <- simple_lods
+  simple_lods_modified$marker <- rownames(simple_lods)
+
+  # Reorder columns to put marker first
+  simple_lods_modified <- simple_lods_modified[, c("marker", 
+                          setdiff(colnames(simple_lods_modified), "marker"))]
+
+  # Write without row names (since they're now in the marker column)
+  write.table(simple_lods_modified, file=output_file_simpleLods, 
+              sep="\t", quote=FALSE, row.names=FALSE)
+
   # 3. Calculate confidence intervals (for ci file)
   if(nrow(significant_qtls) > 0) {
     ci_results <- c()
@@ -366,8 +390,8 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # simpleLods file (top marker per chromosome)
   output_file_simpleLods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_simpleLods.txt"))
-  write.table(simple_lods, file=output_file_simpleLods, sep="\t", quote=FALSE, 
-              row.names=TRUE, col.names=c("marker", colnames(simple_lods)))
+  write.table(simple_lods_modified, file=output_file_simpleLods, sep="\t", quote=FALSE, 
+              row.names=FALSE)
 
   # ci file (confidence intervals)
   if(exists("ci_results") && nrow(ci_results) > 0) {
@@ -377,8 +401,17 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # Regular lods file
   output_file_lods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lods.txt"))
-  write.table(scanone_result, file=output_file_lods, sep="\t", quote=FALSE, 
-              row.names=TRUE, col.names=c("marker", colnames(scanone_result)))
+  # Add the row names as a new column called "marker"
+  scanone_result_modified <- as.data.frame(scanone_result)
+  scanone_result_modified$marker <- rownames(scanone_result)
+
+  # Reorder columns to put marker first
+  scanone_result_modified <- scanone_result_modified[, c("marker", 
+                             setdiff(colnames(scanone_result_modified), "marker"))]
+
+  # Write without row names (since they're now in the marker column)
+  write.table(scanone_result_modified, file=output_file_lods, 
+              sep="\t", quote=FALSE, row.names=FALSE)
 }
 
 # Combine all significant results (if any)
