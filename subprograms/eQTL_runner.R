@@ -202,9 +202,9 @@ mapthis <- jittermap(cross_obj) # Add small amount of noise to markers at same p
 # 5.2) Calculate genotype probabilities ----
 message("Calculating genotype probabilities...")
 mapthis <- calc.genoprob(mapthis,
-                         step = 1, # Adjust step size as needed
-                         error.prob = 0.001,
-                         map.function = "kosambi") # Or other map function
+                        step = 1, # Adjust step size as needed
+                        error.prob = 0.001,
+                        map.function = "kosambi") # Or other map function
 message("Genotype probabilities calculated.")
 
 # 5.3) Simulate genotypes (optional, for imputation or fine-mapping) ----
@@ -313,6 +313,68 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
     write.table(all_scan_df, file = output_file_pheno_all, sep = "\t", quote = FALSE, row.names = FALSE)
 
   }
+
+  # Final calculations for all markers
+
+  # 1. Calculate effects for all markers (for lodsAll file)
+  message("Calculating QTL effects for all markers...")
+  effects_all <- effectscan(mapthis, 
+                           pheno.col = current_pheno_col,
+                           method = args$qtlmethod,
+                           addcovar = covariates_matrix)
+
+  # Combine LOD scores with effects
+  lods_all_with_effects <- data.frame(
+    chr = scanone_result[,"chr"],
+    pos = scanone_result[,"pos"],
+    lod = scanone_result[,3],
+    a = effects_all$a,
+    d = effects_all$d
+  )
+  rownames(lods_all_with_effects) <- rownames(scanone_result)
+
+  # 2. Get top marker per chromosome (for simpleLods)
+  top_markers_by_chr <- find.marker(mapthis, chr=unique(scanone_result$chr), 
+                                    pos=pull.map(mapthis)[unique(scanone_result$chr)])
+  simple_lods <- c()
+  for(chr in unique(scanone_result$chr)) {
+    chr_markers <- scanone_result[scanone_result$chr == chr,]
+    top_marker <- chr_markers[which.max(chr_markers[,3]),]
+    simple_lods <- rbind(simple_lods, top_marker)
+  }
+  simple_lods$threshold <- lod_threshold_val
+  simple_lods$pvalue <- attr(summary(scanone_result, perms=perm_result, alpha=1), "pval")[rownames(simple_lods)]
+
+  # 3. Calculate confidence intervals (for ci file)
+  if(nrow(significant_qtls) > 0) {
+    ci_results <- c()
+    for(i in 1:nrow(significant_qtls)) {
+      chr_id <- significant_qtls[i, "chr"]
+      lodint_result <- lodint(scanone_result, chr=chr_id, drop=1.5)
+      ci_results <- rbind(ci_results, lodint_result)
+    }
+  }
+
+  # Save files with expected naming convention
+  safe_name <- gsub("[^a-zA-Z0-9_.-]", "_", current_pheno_name)
+
+  # lodsAll file (every marker with effects)
+  output_file_lodsAll <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lodsAll.txt"))
+  write.table(lods_all_with_effects, file=output_file_lodsAll, sep="\t", quote=FALSE, row.names=TRUE)
+
+  # simpleLods file (top marker per chromosome)
+  output_file_simpleLods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_simpleLods.txt"))
+  write.table(simple_lods, file=output_file_simpleLods, sep="\t", quote=FALSE, row.names=TRUE)
+
+  # ci file (confidence intervals)
+  if(exists("ci_results") && nrow(ci_results) > 0) {
+    output_file_ci <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_ci.txt"))
+    write.table(ci_results, file=output_file_ci, sep="\t", quote=FALSE, row.names=FALSE)
+  }
+
+  # Regular lods file
+  output_file_lods <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_", args$permnum, "_lods.txt"))
+  write.table(scanone_result, file=output_file_lods, sep="\t", quote=FALSE, row.names=TRUE)
 }
 
 # Combine all significant results (if any)

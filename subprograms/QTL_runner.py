@@ -19,7 +19,7 @@ import time
 # Add the path to the subprograms directory to the system path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
 
-from qtl_mapping_utilities import get_gene_ids
+from qtl_mapping_utilities import get_gene_ids, submit_individual_jobs, wait_for_jobs_completion
 
 # Configure logging
 logging.basicConfig(
@@ -48,7 +48,9 @@ def main(args):
         os.makedirs(args.outdir_base, exist_ok=True)
         logger.info(f"Created base output directory: {args.outdir_base}")
 
-    job_count = 0
+    # Generate all job scripts before submission
+    job_scripts = []
+    
     for gene_id in gene_ids:
         # Sanitize gene_id for use in filenames and job names
         safe_gene_id = "".join(c if c.isalnum() or c in ('.', '_', '-') else '_' for c in gene_id)
@@ -80,57 +82,62 @@ def main(args):
         r_command = " ".join(r_command_parts)
 
         slurm_script_content = f"""#!/bin/bash
-        #SBATCH --job-name={job_name}
-        #SBATCH --partition={args.partition}
-        #SBATCH --nodes={args.nodes}
-        #SBATCH --ntasks-per-node={args.ntasks_per_node}
-        #SBATCH --cpus-per-task={args.cpus_per_task}
-        #SBATCH --mem-per-cpu={args.mem_per_cpu}
-        #SBATCH --time={args.time_limit}
-        #SBATCH --output={log_file}
-        #SBATCH --error={error_file}
+#SBATCH --job-name={job_name}
+#SBATCH --partition={args.partition}
+#SBATCH --nodes={args.nodes}
+#SBATCH --ntasks-per-node={args.ntasks_per_node}
+#SBATCH --cpus-per-task={args.cpus_per_task}
+#SBATCH --mem-per-cpu={args.mem_per_cpu}
+#SBATCH --time={args.time_limit}
+#SBATCH --output={log_file}
+#SBATCH --error={error_file}
 
-        echo "Starting eQTL analysis for gene: {gene_id}"
-        echo "Job ID: $SLURM_JOB_ID"
-        echo "Running on host: $(hostname)"
-        echo "R command: {r_command}"
+echo "Starting eQTL analysis for gene: {gene_id}"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on host: $(hostname)"
+echo "R command: {r_command}"
 
-        # Load R module if necessary (common on HPC clusters)
-        # module load R/your_R_version 
+# Load R module if necessary (common on HPC clusters)
+# module load R/your_R_version 
 
-        {r_command}
+{r_command}
 
-        echo "Finished eQTL analysis for gene: {gene_id}"
-        """
+echo "Finished eQTL analysis for gene: {gene_id}"
+"""
         
         slurm_script_path = os.path.join(gene_outdir, f"{job_name}.slurm")
         with open(slurm_script_path, "w") as f:
             f.write(slurm_script_content)
+        
+        job_scripts.append(slurm_script_path)
 
-        # Submit the job
-        try:
-            # Check current number of running/pending jobs for the user (optional, advanced)
-            # For now, just submit up to max_jobs
-            if job_count < args.max_jobs :
-                submission_command = ["sbatch", slurm_script_path]
-                result = subprocess.run(submission_command, capture_output=True, text=True, check=True)
-                logger.info(f"Submitted job for gene {gene_id}: {result.stdout.strip()} (Script: {slurm_script_path})")
-                job_count += 1
-                time.sleep(args.job_submission_delay) # Small delay to avoid overwhelming the scheduler
+    # Submit the jobs using the advanced job management system
+    try:
+        logger.info(f"Prepared {len(job_scripts)} job scripts. Beginning submission...")
+        submitted_job_ids = submit_individual_jobs(
+            job_scripts,
+            max_concurrent=args.submission_batch_size, 
+            wait_time=args.submission_wait_time,
+            max_active_jobs=args.max_concurrent_jobs,
+            poll_interval=args.poll_interval
+        )
+        
+        logger.info(f"Successfully submitted {len(submitted_job_ids)} out of {len(job_scripts)} jobs")
+        
+        # Optionally wait for jobs to complete
+        if args.wait_for_completion:
+            logger.info(f"Waiting for all submitted jobs to complete (max wait: {args.max_wait_time} seconds)")
+            success = wait_for_jobs_completion(
+                submitted_job_ids, 
+                max_wait_time=args.max_wait_time,
+                poll_interval=args.poll_interval,
+                stringency=args.job_completion_stringency
+            )
+            
+            if success:
+                logger.info("All eQTL jobs completed successfully.")
             else:
-                logger.warning(f"Reached max job submission limit ({args.max_jobs}). Waiting for jobs to complete or increase limit.")
-                # Basic wait strategy: check job queue or simply pause.
-                # A more robust solution would involve monitoring SLURM queue.
-                # For now, we'll just stop submitting more.
-                # You might want to implement a loop that waits and checks `squeue`
-                break # Or implement a waiting loop
+                logger.warning("Some eQTL jobs failed or timed out. Check SLURM logs for details.")
 
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to submit job for gene {gene_id}: {e}")
-            logger.error(f"sbatch stdout: {e.stdout}")
-            logger.error(f"sbatch stderr: {e.stderr}")
-        except FileNotFoundError:
-            logger.error("sbatch command not found. Ensure SLURM tools are in your PATH.")
-            return
-
-    logger.info(f"Finished submitting jobs. Total submitted: {job_count}")
+    except Exception as e:
+        logger.error(f"Error in job submission process: {e}")

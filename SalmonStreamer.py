@@ -175,6 +175,22 @@ def main():
     qtl_parser.add_argument('--job-submission-delay', type=float, default=0.5,
                             help="Delay between job submissions in seconds (default: 0.5)")
     
+    # Advanced SLURM job management parameters
+    qtl_parser.add_argument('--max-concurrent-jobs', type=int, default=4900,
+                            help="Maximum active SLURM jobs allowed (default: 4900)")
+    qtl_parser.add_argument('--submission-batch-size', type=int, default=50,
+                            help="Number of jobs to submit in each batch (default: 50)")
+    qtl_parser.add_argument('--submission-wait-time', type=int, default=10,
+                            help="Seconds to wait between job submission batches (default: 10)")
+    qtl_parser.add_argument('--poll-interval', type=int, default=60,
+                            help="Seconds between SLURM status checks (default: 60)")
+    qtl_parser.add_argument('--wait-for-completion', action='store_true',
+                            help="Wait for all jobs to complete before exiting (default: False)")
+    qtl_parser.add_argument('--max-wait-time', type=int, default=86400,
+                            help="Maximum seconds to wait for job completion (default: 86400 = 24h)")
+    qtl_parser.add_argument('--job-completion-stringency', type=float, default=0.75,
+                            help="Required fraction of successful jobs (default: 0.75)")
+    
     # Parse arguments
     args = parser.parse_args()
     
