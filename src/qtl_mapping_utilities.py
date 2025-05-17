@@ -10,11 +10,7 @@ import pandas as pd
 import subprocess
 import logging
 import time
-import os
-import uuid
 from tqdm import tqdm
-import shutil
-import shlex
 import getpass
 
 # Configure logging
