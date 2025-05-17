@@ -370,10 +370,6 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   simple_lods_modified <- simple_lods_modified[, c("marker", 
                           setdiff(colnames(simple_lods_modified), "marker"))]
 
-  # Write without row names (since they're now in the marker column)
-  write.table(simple_lods_modified, file=output_file_simpleLods, 
-              sep="\t", quote=FALSE, row.names=FALSE)
-
   # 3. Calculate confidence intervals (for ci file)
   if(nrow(significant_qtls) > 0) {
     ci_results <- c()
