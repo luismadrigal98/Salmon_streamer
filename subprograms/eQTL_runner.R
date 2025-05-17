@@ -186,18 +186,17 @@ mapthis <- calc.genoprob(mapthis,
 
 message("Genotype probabilities calculated.")
 
-# 5.3) Simulate genotypes (optional, for imputation or fine-mapping) ----
-# This step was in the old scripts. It can be computationally intensive.
-# It's often used if there's missing genotype data to impute.
-# message("Simulating genotypes...")
-# mapthis <- sim.geno(mapthis,
-#                     n.draws = 32, # Number of simulation draws
-#                     step = 0, # Use 0 for positions at markers, >0 for steps between markers
-#                     off.end = 0.0,
-#                     error.prob = 1.0e-4,
-#                     map.function = "kosambi",
-#                     stepwidth = "fixed")
-# message("Genotypes simulated.")
+# 5.3) Simulate genotypes (for imputation or fine-mapping) ----
+# This step is REQUIRED for effectscan() to work
+message("Simulating genotypes...")
+mapthis <- sim.geno(mapthis,
+                   n.draws = 32, # Number of simulation draws
+                   step = 0, # Use 0 for positions at markers
+                   off.end = 0.0,
+                   error.prob = 1.0e-4,
+                   map.function = "kosambi",
+                   stepwidth = "fixed")
+message("Genotypes simulated.")
 
 # 5.4) Perform eQTL scan for each phenotype ----
 message("Starting eQTL analysis...")
