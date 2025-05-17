@@ -133,5 +133,4 @@ def main(args):
             logger.error("sbatch command not found. Ensure SLURM tools are in your PATH.")
             return
 
-
     logger.info(f"Finished submitting jobs. Total submitted: {job_count}")
