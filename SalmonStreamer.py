@@ -132,16 +132,16 @@ def main():
     qtl_parser = subparsers.add_parser('RunQTL', help='Run QTL analysis on expression data')
     
     # Required file paths
-    qtl_parser.add_argument('--phenofile-path', required=True, 
-                            help="Path to phenotypes file (expression data)")
-    qtl_parser.add_argument('--genfile-path', required=True, 
-                            help="Path to genotypes file")
+    qtl_parser.add_argument('--phenofile-path', nargs="+", required=True, 
+                            help="Path to phenotypes file or files (expression data)")
+    qtl_parser.add_argument('--genfile-path', nargs="+", required=True, 
+                            help="Path to genotypes file or files. Note that if multiple files are provided, is responsibility of the user to pass them in the same order as the previous entries")
     qtl_parser.add_argument('--outdir-base', required=True, 
                             help="Base output directory for QTL results")
     
     # Optional analysis parameters
-    qtl_parser.add_argument('--covfile-path', required=False, 
-                            help="Path to covariates file (optional)")
+    qtl_parser.add_argument('--covfile-path', nargs='+', required=False, 
+                            help="Path to covariates file (optional) or files. Notice that if multiple files are provided, is responsibility of the user to pass them in the same order as the previous entries. Also, if a given input does to have covariates associates, you still need to pass `None`")
     qtl_parser.add_argument('--qtlmethod', default='mr',
                             help="QTL mapping method to use in R/qtl (default: mr)")
     qtl_parser.add_argument('--modeltype', default='normal',
