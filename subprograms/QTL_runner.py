@@ -39,7 +39,7 @@ def main(args):
     # Read in the lit of inputs
 
     pheno_list = args.phenofile_path
-    geno_list = args.genofile_path
+    geno_list = args.genfile_path
     cov_list = args.covfile_path
 
     # Check that the length of the lists is the same
