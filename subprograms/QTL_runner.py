@@ -54,6 +54,9 @@ def main(args):
 
         for phenofile_path, genofile_path, covfile_path in file_pairs:
             gene_ids = get_gene_ids(phenofile_path)
+            
+            subfolder_name = os.path.basename(phenofile_path).split('.')[0]
+            
             if not gene_ids:
                 logger.error("No gene IDs found. Exiting.")
                 return
@@ -65,6 +68,11 @@ def main(args):
                 os.makedirs(args.outdir_base, exist_ok=True)
                 logger.info(f"Created base output directory: {args.outdir_base}")
 
+            # Create a subdirectory for this phenotype file
+            if not os.path.exists(os.path.join(args.outdir_base, subfolder_name)):
+                os.makedirs(os.path.join(args.outdir_base, subfolder_name), exist_ok=True)
+                logger.info(f"Created subdirectory for phenotype file: {subfolder_name}")
+
             # Generate all job scripts before submission
             job_scripts = []
             
@@ -73,7 +81,7 @@ def main(args):
                 safe_gene_id = "".join(c if c.isalnum() or c in ('.', '_', '-') else '_' for c in gene_id)
 
                 # Specific output directory for this gene
-                gene_outdir = os.path.join(args.outdir_base, f"gene_{safe_gene_id}")
+                gene_outdir = os.path.join(args.outdir_base, subfolder_name, f"gene_{safe_gene_id}")
                 if not os.path.exists(gene_outdir):
                     os.makedirs(gene_outdir, exist_ok=True)
 
