@@ -55,7 +55,7 @@ def main(args):
         for phenofile_path, genofile_path, covfile_path in file_pairs:
             gene_ids = get_gene_ids(phenofile_path)
             
-            subfolder_name = os.path.basename(phenofile_path).split('.')[0]
+            subfolder_name = '_'.join(os.path.basename(phenofile_path).split('.')[:-1])
             
             if not gene_ids:
                 logger.error("No gene IDs found. Exiting.")
