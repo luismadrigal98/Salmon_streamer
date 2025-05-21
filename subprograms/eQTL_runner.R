@@ -332,7 +332,7 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   write.table(lods_all_with_effects_modified, file=output_file_lodsAll, sep="\t", quote=FALSE, 
               row.names=FALSE)
 
-  # 2. Get top marker per chromosome (for simpleLods) - fixed version
+  # 2. Get top marker per chromosome (for simpleLods) - improved version with effects
   simple_lods <- c()
   for(chr in unique(scanone_result$chr)) {
     # Get all markers for this chromosome
@@ -343,7 +343,19 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
       max_idx <- which.max(chr_markers[,3])
       top_marker <- chr_markers[max_idx,]
       
-      # Add threshold and other data
+      # Add threshold and effects data
+      marker_name <- rownames(top_marker)
+      
+      # Get effects for this marker
+      if (marker_name %in% rownames(effects_all$a)) {
+        top_marker$a <- effects_all$a[marker_name]
+        top_marker$d <- effects_all$d[marker_name]
+      } else {
+        # If marker not found in effects (rare case)
+        top_marker$a <- NA
+        top_marker$d <- NA
+      }
+      
       simple_lods <- rbind(simple_lods, top_marker)
     }
   }
