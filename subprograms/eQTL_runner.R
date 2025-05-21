@@ -364,14 +364,28 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   if(length(simple_lods) > 0 && nrow(simple_lods) > 0) {
     simple_lods$threshold <- lod_threshold_val
     
-    # Calculate p-values from permutation results safely
-    pvals <- suppressWarnings(attr(summary(scanone_result, perms=perm_result, alpha=1), "pval"))
-    simple_lods$pvalue <- pvals[rownames(simple_lods)]
-  } else {
-    # Create empty simple_lods with the right structure
-    simple_lods <- data.frame(chr=character(), pos=numeric(), 
-                             lod=numeric(), threshold=numeric(), 
-                             pvalue=numeric())
+    # Directly calculate p-values from permutation results
+    # For each marker, count proportion of permutations with higher LOD scores
+    message("Calculating p-values from permutations...")
+    
+    # If perm_result is a vector (one phenotype), convert to matrix for consistency
+    perm_matrix <- if(is.vector(perm_result)) matrix(perm_result, ncol=1) else as.matrix(perm_result)
+    
+    # Initialize p-values vector
+    p_values <- numeric(nrow(simple_lods))
+    names(p_values) <- rownames(simple_lods)
+    
+    # Calculate empirical p-values for each marker
+    for(i in 1:nrow(simple_lods)) {
+      marker_lod <- simple_lods[i, "lod"]
+      # Count proportion of permutations with LOD >= marker_lod
+      p_values[i] <- mean(perm_matrix[,1] >= marker_lod)
+      # If p-value is 0, set to lowest possible value based on permutation count
+      if(p_values[i] == 0) p_values[i] <- 1/nrow(perm_matrix)
+    }
+    
+    simple_lods$pvalue <- p_values
+    message("P-values calculated successfully.")
   }
 
   # Add the row names as a new column called "marker"
