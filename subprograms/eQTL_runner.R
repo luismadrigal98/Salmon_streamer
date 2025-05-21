@@ -342,18 +342,17 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
     pvalue = all_p_values
   )
 
-  # Match effects using chr and pos
+  # Match effects for all markers (simple direct match)
   for (i in 1:nrow(lods_all_with_effects)) {
     current_chr <- lods_all_with_effects$chr[i]
     current_pos <- lods_all_with_effects$pos[i]
     
-    # Find matching position in effects_all (using small tolerance for floating point)
-    matches <- which(effects_all$chr == current_chr & 
-                    abs(effects_all$pos - current_pos) < 1e-6)
+    # Direct exact matching - no tolerance needed
+    idx <- which(effects_all$chr == current_chr & effects_all$pos == current_pos)
     
-    if (length(matches) > 0) {
-      lods_all_with_effects$a[i] <- effects_all$a[matches[1]]
-      lods_all_with_effects$d[i] <- effects_all$d[matches[1]]
+    if (length(idx) > 0) {
+      lods_all_with_effects$a[i] <- effects_all$a[idx[1]]
+      lods_all_with_effects$d[i] <- effects_all$d[idx[1]]
     }
   }
 
@@ -386,95 +385,28 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
       max_idx <- which.max(chr_markers[,3])
       top_marker <- chr_markers[max_idx,]
       
-      # Add threshold and effects data
-      marker_name <- rownames(top_marker)
+      # Get the marker's chromosome and position
+      current_chr <- top_marker$chr
+      current_pos <- top_marker$pos
       
-      # Get effects for this marker - using more robust matching
-      marker_name <- rownames(top_marker)
+      # Direct matching by chromosome and position (exact match)
+      idx <- which(effects_all$chr == current_chr & effects_all$pos == current_pos)
       
-      # Debug the marker name issue
-      message(paste("Looking for effects for marker:", marker_name))
-      
-      # Get position information for matching if direct name match fails
-      chr_match <- as.character(top_marker$chr)
-      pos_match <- top_marker$pos
-      
-      # Try direct match first
-      if (marker_name %in% rownames(effects_all$a)) {
-        top_marker$a <- effects_all$a[marker_name]
-        top_marker$d <- effects_all$d[marker_name]
-        message("Found direct match for marker")
+      if(length(idx) > 0) {
+        # Perfect match found
+        top_marker$a <- effects_all$a[idx[1]]
+        top_marker$d <- effects_all$d[idx[1]]
       } else {
-        # Try position-based matching
-        message("Direct match failed, trying position-based matching")
-        
-        # Debug mode - set to TRUE to see detailed matching information
-        debug_matching <- TRUE
-        
-        if(debug_matching) {
-          # Print detailed debug info
-          message("Marker details: name=", marker_name, ", chr=", chr_match, ", pos=", pos_match)
-          message("Available effect markers: ", paste(head(rownames(effects_all$a)), collapse=", "), "...")
-        }
-        
-        # Get all markers with the same chromosome
-        same_chr_markers <- which(as.character(scanone_result[rownames(effects_all$a), "chr"]) == chr_match)
-        same_chr_effect_markers <- rownames(effects_all$a)[same_chr_markers]
-        
-        if(length(same_chr_effect_markers) > 0) {
-          # Find closest position match
-          pos_distances <- abs(scanone_result[same_chr_effect_markers, "pos"] - pos_match)
-          closest_idx <- which.min(pos_distances)
-          
-          if(pos_distances[closest_idx] < 0.01) { # Allow larger tolerance
-            matched_marker <- same_chr_effect_markers[closest_idx]
-            top_marker$a <- effects_all$a[matched_marker]
-            top_marker$d <- effects_all$d[matched_marker]
-            message(paste("Found position-based match:", matched_marker, 
-                         "at distance", pos_distances[closest_idx]))
-          } else {
-            top_marker$a <- NA
-            top_marker$d <- NA
-            message("No close position match found (closest distance: ", 
-                   pos_distances[closest_idx], ")")
-          }
-        } else {
-          top_marker$a <- NA
-          top_marker$d <- NA
-          message("No markers on same chromosome found")
-        }
+        top_marker$a <- NA
+        top_marker$d <- NA
+        message("Warning: No exact match found for marker at chr ", current_chr, " pos ", current_pos)
       }
+      
+      # Add threshold values
+      top_marker$threshold <- lod_threshold_val
       
       simple_lods <- rbind(simple_lods, top_marker)
     }
-  }
-  
-  # Add threshold and p-values if we have any markers
-  if(length(simple_lods) > 0 && nrow(simple_lods) > 0) {
-    simple_lods$threshold <- lod_threshold_val
-    
-    # Directly calculate p-values from permutation results
-    # For each marker, count proportion of permutations with higher LOD scores
-    message("Calculating p-values from permutations...")
-    
-    # If perm_result is a vector (one phenotype), convert to matrix for consistency
-    perm_matrix <- if(is.vector(perm_result)) matrix(perm_result, ncol=1) else as.matrix(perm_result)
-    
-    # Initialize p-values vector
-    p_values <- numeric(nrow(simple_lods))
-    names(p_values) <- rownames(simple_lods)
-    
-    # Calculate empirical p-values for each marker
-    for(i in 1:nrow(simple_lods)) {
-      marker_lod <- simple_lods[i, "lod"]
-      # Count proportion of permutations with LOD >= marker_lod
-      p_values[i] <- mean(perm_matrix[,1] >= marker_lod)
-      # If p-value is 0, set to lowest possible value based on permutation count
-      if(p_values[i] == 0) p_values[i] <- 1/nrow(perm_matrix)
-    }
-    
-    simple_lods$pvalue <- p_values
-    message("P-values calculated successfully.")
   }
 
   # Add the row names as a new column called "marker"
