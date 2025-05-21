@@ -35,6 +35,8 @@ parser$add_argument("--covfile_path", type = "character", required = FALSE, defa
                     help = "Path to the covariate file (optional, e.g., CSV)")
 parser$add_argument("--source_dir", type = "character", required = FALSE, default = NULL,
                     help = "Directory containing the source scripts")
+parser$add_argument("--verbose", action="store_true", default=FALSE,
+                    help="Print detailed messages [default: %(default)s]")
 
 # 2.1) Retrieve the arguments ----
 args <- parser$parse_args()
@@ -242,7 +244,13 @@ if (!exists("covariates_matrix")) {
   covariates_matrix <- NULL
 }
 
-for (current_pheno_name in pheno_names_to_process) { # Modified loop
+if(length(pheno_names_to_process) > 1) {
+  message(paste("Processing", length(pheno_names_to_process), "phenotypes"))
+  pb <- txtProgressBar(min=0, max=length(pheno_names_to_process), style=3)
+}
+
+for (i in seq_along(pheno_names_to_process)) { # Modified loop
+  current_pheno_name <- pheno_names_to_process[i]
   message(paste("Analyzing phenotype:", current_pheno_name))
   current_pheno_col <- which(phenames(mapthis) == current_pheno_name)
 
@@ -304,7 +312,8 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   # Create a separate effectscan call that doesn't pass method to plotting functions
   effects_all <- effectscan(mapthis, 
                            pheno.col = current_pheno_col,
-                           addcovar = covariates_matrix)  # Remove method parameter here
+                           addcovar = covariates_matrix,
+                           draw = FALSE)  # This prevents the warnings
 
   # Add this debug information for effects_all
   message("Effects structure:")
@@ -399,11 +408,19 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
       } else {
         top_marker$a <- NA
         top_marker$d <- NA
-        message("Warning: No exact match found for marker at chr ", current_chr, " pos ", current_pos)
+        if(args$verbose) {
+          message("Warning: No exact match found for marker at chr ", current_chr, " pos ", current_pos)
+        }
       }
       
       # Add threshold values
       top_marker$threshold <- lod_threshold_val
+      
+      # Calculate p-value for this top marker
+      marker_lod <- top_marker$lod
+      p_value <- mean(perm_matrix[,1] >= marker_lod)
+      if(p_value == 0) p_value <- 1/nrow(perm_matrix)
+      top_marker$pvalue <- p_value
       
       simple_lods <- rbind(simple_lods, top_marker)
     }
@@ -506,6 +523,10 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
   # Write without row names (since they're now in the marker column)
   write.table(scanone_result_modified, file=output_file_lods, 
               sep="\t", quote=FALSE, row.names=FALSE)
+
+  if(length(pheno_names_to_process) > 1) {
+    setTxtProgressBar(pb, i)  # Where i is the iteration counter
+  }
 }
 
 # Combine all significant results (if any)
@@ -525,14 +546,3 @@ if (length(all_results_list) > 0) {
 }
 
 message("eQTL analysis script finished.")
-
-# Debug information about structures
-message("Number of rows in scanone_result: ", nrow(scanone_result))
-message("Number of rows in effects_all: ", nrow(effects_all))
-
-# Print first few entries of each to compare
-message("First few entries of scanone_result:")
-print(head(data.frame(chr=scanone_result$chr, pos=scanone_result$pos)))
-
-message("First few entries of effects_all:")
-print(head(data.frame(chr=effects_all$chr, pos=effects_all$pos)))
