@@ -332,15 +332,30 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
     if(all_p_values[i] == 0) all_p_values[i] <- 1/nrow(perm_matrix)
   }
 
-  # Define lods_all_with_effects WITH p-values
+  # Define lods_all_with_effects by matching chr and pos
   lods_all_with_effects <- data.frame(
     chr = scanone_result[,"chr"],
     pos = scanone_result[,"pos"],
     lod = scanone_result[,3],
-    a = effects_all$a,
-    d = effects_all$d,
-    pvalue = all_p_values  # Add p-values here
+    a = NA,  # Initialize with NA
+    d = NA,  # Initialize with NA
+    pvalue = all_p_values
   )
+
+  # Match effects using chr and pos
+  for (i in 1:nrow(lods_all_with_effects)) {
+    current_chr <- lods_all_with_effects$chr[i]
+    current_pos <- lods_all_with_effects$pos[i]
+    
+    # Find matching position in effects_all (using small tolerance for floating point)
+    matches <- which(effects_all$chr == current_chr & 
+                    abs(effects_all$pos - current_pos) < 1e-6)
+    
+    if (length(matches) > 0) {
+      lods_all_with_effects$a[i] <- effects_all$a[matches[1]]
+      lods_all_with_effects$d[i] <- effects_all$d[matches[1]]
+    }
+  }
 
   rownames(lods_all_with_effects) <- rownames(scanone_result)
 
@@ -578,3 +593,14 @@ if (length(all_results_list) > 0) {
 }
 
 message("eQTL analysis script finished.")
+
+# Debug information about structures
+message("Number of rows in scanone_result: ", nrow(scanone_result))
+message("Number of rows in effects_all: ", nrow(effects_all))
+
+# Print first few entries of each to compare
+message("First few entries of scanone_result:")
+print(head(data.frame(chr=scanone_result$chr, pos=scanone_result$pos)))
+
+message("First few entries of effects_all:")
+print(head(data.frame(chr=effects_all$chr, pos=effects_all$pos)))
