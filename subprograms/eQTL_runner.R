@@ -306,6 +306,34 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
                            pheno.col = current_pheno_col,
                            addcovar = covariates_matrix)  # Remove method parameter here
 
+  # Add this after calculating effects_all and before creating lods_all_with_effects
+  # Calculate p-values for all markers (computationally intensive)
+  message("Calculating p-values for all markers...")
+  perm_matrix <- if(is.vector(perm_result)) matrix(perm_result, ncol=1) else as.matrix(perm_result)
+
+  # Initialize p-values vector for all markers
+  all_p_values <- numeric(nrow(scanone_result))
+  names(all_p_values) <- rownames(scanone_result)
+
+  # Calculate empirical p-values for each marker
+  for(i in 1:nrow(scanone_result)) {
+    marker_lod <- scanone_result[i, 3]  # LOD score column
+    # Count proportion of permutations with LOD >= marker_lod
+    all_p_values[i] <- mean(perm_matrix[,1] >= marker_lod)
+    # If p-value is 0, set to lowest possible value based on permutation count
+    if(all_p_values[i] == 0) all_p_values[i] <- 1/nrow(perm_matrix)
+  }
+
+  # Modify the lods_all_with_effects data frame to include p-values
+  lods_all_with_effects <- data.frame(
+    chr = scanone_result[,"chr"],
+    pos = scanone_result[,"pos"],
+    lod = scanone_result[,3],
+    a = effects_all$a,
+    d = effects_all$d,
+    pvalue = all_p_values  # Add p-values here
+  )
+
   # Combine LOD scores with effects
   lods_all_with_effects <- data.frame(
     chr = scanone_result[,"chr"],
@@ -346,14 +374,53 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
       # Add threshold and effects data
       marker_name <- rownames(top_marker)
       
-      # Get effects for this marker
+      # Get effects for this marker - using more robust matching
+      marker_name <- rownames(top_marker)
+      
+      # Debug the marker name issue
+      message(paste("Looking for effects for marker:", marker_name))
+      
+      # Get position information for matching if direct name match fails
+      chr_match <- as.character(top_marker$chr)
+      pos_match <- top_marker$pos
+      
+      # Try direct match first
       if (marker_name %in% rownames(effects_all$a)) {
         top_marker$a <- effects_all$a[marker_name]
         top_marker$d <- effects_all$d[marker_name]
+        message("Found direct match for marker")
       } else {
-        # If marker not found in effects (rare case)
-        top_marker$a <- NA
-        top_marker$d <- NA
+        # Try position-based matching
+        message("Direct match failed, trying position-based matching")
+        matched_idx <- NULL
+        
+        # Loop through effects_all to find position match
+        for (i in 1:length(rownames(effects_all$a))) {
+          effect_marker <- rownames(effects_all$a)[i]
+          if (effect_marker %in% rownames(scanone_result)) {
+            effect_chr <- as.character(scanone_result[effect_marker, "chr"])
+            effect_pos <- scanone_result[effect_marker, "pos"]
+            
+            # Check if chromosome and position match (with small tolerance)
+            if (effect_chr == chr_match && abs(effect_pos - pos_match) < 0.001) {
+              matched_idx <- i
+              break
+            }
+          }
+        }
+        
+        # If match found, use it
+        if (!is.null(matched_idx)) {
+          effect_marker <- rownames(effects_all$a)[matched_idx]
+          top_marker$a <- effects_all$a[effect_marker]
+          top_marker$d <- effects_all$d[effect_marker]
+          message(paste("Found position-based match:", effect_marker))
+        } else {
+          # If no match found
+          top_marker$a <- NA
+          top_marker$d <- NA
+          message("No match found for marker in effects data")
+        }
       }
       
       simple_lods <- rbind(simple_lods, top_marker)
@@ -397,13 +464,65 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
                           setdiff(colnames(simple_lods_modified), "marker"))]
 
   # 3. Calculate confidence intervals (for ci file)
+  ci_results <- NULL
+  message("Attempting to calculate confidence intervals...")
   if(nrow(significant_qtls) > 0) {
+    message(paste("Found", nrow(significant_qtls), "significant QTLs for CI calculation"))
     ci_results <- c()
     for(i in 1:nrow(significant_qtls)) {
-      chr_id <- significant_qtls[i, "chr"]
-      lodint_result <- lodint(scanone_result, chr=chr_id, drop=1.5)
-      ci_results <- rbind(ci_results, lodint_result)
+      tryCatch({
+        chr_id <- significant_qtls[i, "chr"]
+        message(paste("Calculating CI for QTL on chromosome", chr_id))
+        # The findqtl function may be needed to identify the QTL first
+        qtl_pos <- significant_qtls[i, "pos"]
+        lodint_result <- lodint(scanone_result, chr=chr_id, drop=1.5, expandtomarkers=TRUE)
+        message(paste("CI calculation complete for chr", chr_id))
+        # Add a column for gene and threshold
+        lodint_result$gene <- current_pheno_name
+        lodint_result$threshold <- lod_threshold_val
+        ci_results <- rbind(ci_results, lodint_result)
+      }, error = function(e) {
+        message(paste("Error calculating CI for QTL on chromosome", chr_id, ":", e$message))
+      })
     }
+  } else {
+    # Optional: Calculate CI for top markers even if not significant
+    message("No significant QTLs found. Calculating CI for top markers per chromosome instead.")
+    ci_results <- c()
+    for(chr in unique(scanone_result$chr)) {
+      tryCatch({
+        # Find the peak marker for this chromosome from simple_lods
+        top_marker_for_chr <- simple_lods[simple_lods$chr == chr,]
+        if(nrow(top_marker_for_chr) > 0) {
+          message(paste("Calculating CI for top marker on chromosome", chr))
+          lodint_result <- lodint(scanone_result, chr=chr, drop=1.5, expandtomarkers=TRUE)
+          lodint_result$gene <- current_pheno_name
+          lodint_result$threshold <- lod_threshold_val
+          lodint_result$significant <- "no"
+          ci_results <- rbind(ci_results, lodint_result)
+        }
+      }, error = function(e) {
+        message(paste("Error calculating CI for chromosome", chr, ":", e$message))
+      })
+    }
+  }
+
+  # ci file (confidence intervals) - with better error handling
+  if(!is.null(ci_results) && length(ci_results) > 0) {
+    if(is.data.frame(ci_results) && nrow(ci_results) > 0) {
+      # Add marker column if needed
+      if(!"marker" %in% colnames(ci_results) && !is.null(rownames(ci_results))) {
+        ci_results$marker <- rownames(ci_results)
+      }
+      
+      output_file_ci <- file.path(args$outdir, paste0(safe_name, "_", args$qtlmethod, "_ci.txt"))
+      write.table(ci_results, file=output_file_ci, sep="\t", quote=FALSE, row.names=FALSE)
+      message(paste("CI file written to", output_file_ci))
+    } else {
+      message("CI results structure is incomplete - no file written")
+    }
+  } else {
+    message("No CI results generated to write to file")
   }
 
   # Save files with expected naming convention
