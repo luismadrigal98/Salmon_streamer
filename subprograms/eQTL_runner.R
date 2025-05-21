@@ -306,6 +306,14 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
                            pheno.col = current_pheno_col,
                            addcovar = covariates_matrix)  # Remove method parameter here
 
+  # Add this debug information for effects_all
+  message("Effects structure:")
+  message("Length of effects_all$a: ", length(effects_all$a))
+  message("Some sample marker names from effects_all$a: ", 
+          paste(head(names(effects_all$a)), collapse=", "))
+  message("Some sample marker names from scanone_result: ", 
+          paste(head(rownames(scanone_result)), collapse=", "))
+
   # Add this after calculating effects_all and before creating lods_all_with_effects
   # Calculate p-values for all markers (computationally intensive)
   message("Calculating p-values for all markers...")
@@ -324,7 +332,7 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
     if(all_p_values[i] == 0) all_p_values[i] <- 1/nrow(perm_matrix)
   }
 
-  # Modify the lods_all_with_effects data frame to include p-values
+  # Define lods_all_with_effects WITH p-values
   lods_all_with_effects <- data.frame(
     chr = scanone_result[,"chr"],
     pos = scanone_result[,"pos"],
@@ -334,14 +342,6 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
     pvalue = all_p_values  # Add p-values here
   )
 
-  # Combine LOD scores with effects
-  lods_all_with_effects <- data.frame(
-    chr = scanone_result[,"chr"],
-    pos = scanone_result[,"pos"],
-    lod = scanone_result[,3],
-    a = effects_all$a,
-    d = effects_all$d
-  )
   rownames(lods_all_with_effects) <- rownames(scanone_result)
 
   # Add the row names as a new column called "marker"
@@ -350,7 +350,7 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
 
   # Reorder columns to put marker first
   lods_all_with_effects_modified <- lods_all_with_effects_modified[, c("marker", 
-                                   setdiff(colnames(lods_all_with_effects_modified), "marker"))]
+                                    setdiff(colnames(lods_all_with_effects_modified), "marker"))]
 
   # Define output file path for lodsAll before using it
   safe_name <- gsub("[^a-zA-Z0-9_.-]", "_", current_pheno_name)
@@ -392,34 +392,41 @@ for (current_pheno_name in pheno_names_to_process) { # Modified loop
       } else {
         # Try position-based matching
         message("Direct match failed, trying position-based matching")
-        matched_idx <- NULL
         
-        # Loop through effects_all to find position match
-        for (i in 1:length(rownames(effects_all$a))) {
-          effect_marker <- rownames(effects_all$a)[i]
-          if (effect_marker %in% rownames(scanone_result)) {
-            effect_chr <- as.character(scanone_result[effect_marker, "chr"])
-            effect_pos <- scanone_result[effect_marker, "pos"]
-            
-            # Check if chromosome and position match (with small tolerance)
-            if (effect_chr == chr_match && abs(effect_pos - pos_match) < 0.001) {
-              matched_idx <- i
-              break
-            }
-          }
+        # Debug mode - set to TRUE to see detailed matching information
+        debug_matching <- TRUE
+        
+        if(debug_matching) {
+          # Print detailed debug info
+          message("Marker details: name=", marker_name, ", chr=", chr_match, ", pos=", pos_match)
+          message("Available effect markers: ", paste(head(rownames(effects_all$a)), collapse=", "), "...")
         }
         
-        # If match found, use it
-        if (!is.null(matched_idx)) {
-          effect_marker <- rownames(effects_all$a)[matched_idx]
-          top_marker$a <- effects_all$a[effect_marker]
-          top_marker$d <- effects_all$d[effect_marker]
-          message(paste("Found position-based match:", effect_marker))
+        # Get all markers with the same chromosome
+        same_chr_markers <- which(as.character(scanone_result[rownames(effects_all$a), "chr"]) == chr_match)
+        same_chr_effect_markers <- rownames(effects_all$a)[same_chr_markers]
+        
+        if(length(same_chr_effect_markers) > 0) {
+          # Find closest position match
+          pos_distances <- abs(scanone_result[same_chr_effect_markers, "pos"] - pos_match)
+          closest_idx <- which.min(pos_distances)
+          
+          if(pos_distances[closest_idx] < 0.01) { # Allow larger tolerance
+            matched_marker <- same_chr_effect_markers[closest_idx]
+            top_marker$a <- effects_all$a[matched_marker]
+            top_marker$d <- effects_all$d[matched_marker]
+            message(paste("Found position-based match:", matched_marker, 
+                         "at distance", pos_distances[closest_idx]))
+          } else {
+            top_marker$a <- NA
+            top_marker$d <- NA
+            message("No close position match found (closest distance: ", 
+                   pos_distances[closest_idx], ")")
+          }
         } else {
-          # If no match found
           top_marker$a <- NA
           top_marker$d <- NA
-          message("No match found for marker in effects data")
+          message("No markers on same chromosome found")
         }
       }
       
