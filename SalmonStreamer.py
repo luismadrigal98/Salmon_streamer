@@ -32,7 +32,6 @@ from subprograms.ProcessGenotypes import main as process_genotypes_main
 from subprograms.MakePhenotypes import main as make_phenotypes_main
 from subprograms.PrepareQTLInputs import main as prepare_qtl_inputs_main
 from src.postprocessing_utilities import process_post_pipeline
-from src.postprocessing_utilities import process_post_pipeline
 
 def main():
     # Create the main parser
