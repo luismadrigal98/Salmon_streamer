@@ -11,9 +11,13 @@ import subprocess
 import os
 import pandas as pd
 import numpy as np
-from subprograms.TranslateSalmon import main as translate_salmon_main
-from subprograms.CalculateRawReads import main as calculate_raw_reads_main
-from subprograms.CalculateCPM import main as calculate_cpm_main
+
+# Go to the subprograms directory to import the necessary functions
+# This is necessary to avoid circular imports (subprograms is a sibling directory)
+
+from ..subprograms.TranslateSalmon import main as translate_salmon_main
+from ..subprograms.CalculateRawReads import main as calculate_raw_reads_main
+from ..subprograms.CalculateCPM import main as calculate_cpm_main
 
 def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', includes_alternative_genome = False):
     """
