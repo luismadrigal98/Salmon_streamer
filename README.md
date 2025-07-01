@@ -1,52 +1,449 @@
-# Salmon Pipeline
+# Salmon Streamer - Complete RNA-seq to QTL Analysis Pipeline
 
 ## Overview
 
-This project provides a pipeline for RNA-seq data analysis using the Salmon tool. It includes two main components:
+Salmon Streamer is a comprehensive bioinformatics pipeline for RNA-seq data analysis, from initial quantification through genotype/phenotype processing and QTL input preparation. The pipeline integrates multiple tools and analysis steps into a unified command-line interface.
 
-1. `salmon_runner.py`: A script to run the Salmon pipeline for quantifying RNA-seq reads.
-2. `salmon_output_processor.py`: A script to combine the quantification results from the Salmon pipeline into a single table.
+### Key Features
+
+- **Complete RNA-seq Pipeline**: From raw reads to quantified expression
+- **Allele-Specific Expression**: Handle dual-genome quantification for allele-specific mapping
+- **Genotype Calling**: Process transcript mapping data to call genotypes
+- **QTL Preparation**: Generate all inputs needed for QTL analysis
+- **Quality Control**: PCA-based sample filtering and outlier detection
+- **Modular Design**: Run individual steps or complete workflows
+
+### Pipeline Components
+
+1. **Genome Preparation**
+   - Annotation transfer between genomes (Liftoff)
+   - Combined transcriptome generation
+
+2. **RNA-seq Quantification**
+   - Salmon index building and quantification
+   - Output processing and combination
+
+3. **Post-processing**
+   - Allele-specific read count organization
+   - CPM calculation for quality control
+
+4. **Genotype Processing**
+   - Transcript mapping analysis
+   - Genotype calling from RNA-seq data
+   - Error rate estimation and quality filtering
+
+5. **Phenotype Generation**
+   - Expression data normalization (Box-Cox transformation)
+   - Cross-specific phenotype file creation
+
+6. **QTL Input Preparation**
+   - R/qtl format file generation
+   - Phenotype and genotype integration
+
+7. **QTL Analysis**
+   - Automated SLURM job submission
+   - Permutation testing and significance analysis
 
 ## Requirements
 
-- Python 3.x
-- Salmon
+### Software Dependencies
+- Python 3.8+
+- Salmon (for RNA-seq quantification)
+- Liftoff (for annotation transfer)
+- Minimap2 (for genome alignment)
+- R with qtl package (for QTL analysis)
+
+### Python Packages
+- pandas
+- numpy
+- scipy
 - tqdm
 - argparse
 - subprocess
 - logging
 
+### Optional for HPC
+- SLURM (for cluster job submission)
+
 ## Installation
 
 1. Clone the repository:
-
-    ```sh
+    ```bash
     git clone https://github.com/luismadrigal98/Salmon_streamer
     cd Salmon_streamer
     ```
 
 2. Create and activate a conda environment:
-
-    ```sh
+    ```bash
     conda create --name salmon_pipeline python=3.8
     conda activate salmon_pipeline
     ```
 
-3. Install the required Python packages:
-
-    ```sh
-    pip install tqdm argparse logging
+3. Install required packages:
+    ```bash
+    # Core bioinformatics tools
+    conda install -c bioconda salmon liftoff minimap2
+    
+    # Python dependencies
+    pip install pandas numpy scipy tqdm
+    
+    # R and qtl package (if running QTL analysis)
+    conda install -c conda-forge r-base
+    R -e "install.packages('qtl', repos='https://cran.r-project.org')"
     ```
 
-4. Install Salmon:
+## Quick Start
 
-    ```sh
-    conda install -c bioconda salmon
-    ```
+### 1. Prepare Genomes and Transcriptome
 
-## Usage
+Transfer annotations from reference to alternative genome:
+```bash
+python SalmonStreamer.py AnnTransfer \
+    --target alternative_genome.fa \
+    --reference reference_genome.fa \
+    --annotation_gff3 reference_annotation.gff3 \
+    --output transferred_annotation.gff3 \
+    --intermediate_dir ./liftoff_temp
+```
 
-### Running the Salmon Pipeline
+Generate combined transcriptome:
+```bash
+python SalmonStreamer.py GenerateTranscriptome \
+    --alt-genome-id SWB \
+    --ref-genome-id IM767 \
+    --liftover-gff transferred_annotation.gff3 \
+    --original-ref-gff reference_annotation.gff3 \
+    --alt-genome-fasta alternative_genome.fa \
+    --ref-genome-fasta reference_genome.fa \
+    --output-dir ./transcriptome_output
+```
+
+### 2. Run RNA-seq Quantification
+
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome combined_transcriptome.fasta \
+    --reference reference_genome.fa \
+    --alternative alternative_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --threads 8
+```
+
+### 3. Process Salmon Output
+
+```bash
+python SalmonStreamer.py ProcessSalmonOut \
+    --output ./salmon_output \
+    --result_name combined_counts.txt \
+    --mode python
+```
+
+### 4. Complete Post-processing Pipeline
+
+```bash
+python SalmonStreamer.py ProcessPost \
+    --crosses SWB SF \
+    --genes-file Genes_to_updated_767_assembly.txt \
+    --quant-results-files QUANT_RESULTS_767_vs_SWB QUANT_RESULTS_767_vs_SF \
+    --cpm-min 5.0 \
+    --output-dir ./processed_output
+```
+
+### 5. Quality Control with PCA
+
+```bash
+python SalmonStreamer.py PCA_QC \
+    --input-data RawSamples_forPCA \
+    --label-rules-file examples/label_rules.json \
+    --output-filtered-data-name filtered_counts.tsv \
+    --output-dir ./qc_output \
+    --iqr-multiplier 1.5
+```
+
+### 6. Process Genotypes
+
+```bash
+python SalmonStreamer.py ProcessGenotypes \
+    --cross SWB \
+    --allele-counts-file allele_counts.combined.updated767.SWB.txt \
+    --samples-file SWB.combined.samples.txt \
+    --genes-file Genes_to_updated_767_assembly.txt \
+    --min-parental-lines 5 \
+    --mapping-threshold 0.95 \
+    --output-dir ./genotype_output
+```
+
+### 7. Generate Phenotype Files
+
+```bash
+python SalmonStreamer.py MakePhenotypes \
+    --genes-by-cross-file Genes_by_cross.txt \
+    --total-reads-files Total_reads_byplant.SF Total_reads_byplant.SWB \
+    --readcounts-files Readcounts.updated767.f2_SF.txt Readcounts.updated767.f2_SWB.txt \
+    --f2-lists SF.included.f2s.txt SWB.included.f2s.txt \
+    --crosses SF SWB \
+    --output-dir ./phenotype_files
+```
+
+### 8. Prepare QTL Inputs
+
+```bash
+python SalmonStreamer.py PrepareQTLInputs \
+    --cross SWB \
+    --genotype-pp-file SWB.F2_geno_PP.txt \
+    --estimates-files estimates.SWB.Chr_01 estimates.SWB.Chr_02 \
+    --genes-by-cross-file Genes_by_cross.txt \
+    --phenotype-group gene.group1 \
+    --output-dir ./qtl_inputs
+```
+
+### 9. Run QTL Analysis
+
+```bash
+python SalmonStreamer.py RunQTL \
+    --phenofile-path phenotype_file.txt \
+    --genfile-path genotype_file.txt \
+    --outdir-base ./qtl_results \
+    --permnum 1000 \
+    --max-jobs 100
+```
+
+## Detailed Usage
+
+### Individual Pipeline Steps
+
+#### Annotation Transfer
+Transfer gene annotations from a reference genome to an alternative genome using Liftoff.
+
+```bash
+python SalmonStreamer.py AnnTransfer --help
+```
+
+Key parameters:
+- `--target`: Alternative genome FASTA
+- `--reference`: Reference genome FASTA  
+- `--annotation_gff3`: Reference annotation GFF3
+- `--output`: Output annotation file
+
+#### Transcriptome Generation
+Create a combined transcriptome containing genes from both reference and alternative genomes.
+
+```bash
+python SalmonStreamer.py GenerateTranscriptome --help
+```
+
+Key parameters:
+- `--cov-threshold`: Minimum liftover coverage (default: 0.9)
+- `--seqid-threshold`: Minimum sequence identity (default: 0.9)
+
+#### RNA-seq Quantification
+Run Salmon quantification on RNA-seq reads against the combined transcriptome.
+
+```bash
+python SalmonStreamer.py RunSalmonQuant --help
+```
+
+Key parameters:
+- `--threads`: Number of parallel threads
+- `--memory`: Memory per job (for cluster execution)
+- `--quant_options`: Salmon quantification options
+
+#### Post-processing Components
+
+**Translate Salmon Outputs**: Organize read counts by allele
+```bash
+python SalmonStreamer.py TranslateSalmon SWB \
+    --genes-file Genes_mapping.txt \
+    --quant-results-file QUANT_RESULTS.txt
+```
+
+**Calculate Raw Reads**: Sum total reads per sample
+```bash
+python SalmonStreamer.py CalculateRawReads \
+    --salmon-files output1.txt output2.txt \
+    --output-file raw_reads.txt
+```
+
+**Calculate CPM**: Normalize to counts per million for PCA
+```bash
+python SalmonStreamer.py CalculateCPM \
+    --raw-reads-file raw_reads.txt \
+    --salmon-files output1.txt output2.txt \
+    --cpm-min 5.0
+```
+
+#### Genotype Processing Pipeline
+
+The genotype processing pipeline performs comprehensive analysis of transcript mapping data:
+
+1. **Statistical Analysis** (P1): Calculate allele-specific mapping statistics
+2. **Gene Filtering** (P2): Filter genes based on mapping thresholds
+3. **Genotype Calling** (P3): Call genotypes for F2 individuals
+4. **Quality Control** (P4): Identify and remove problematic markers/samples  
+5. **Error Estimation** (P5): Estimate genotyping error rates per chromosome
+6. **Parameter Optimization** (P6): Optimize recombination and error parameters
+
+Key parameters:
+- `--min-parental-lines`: Minimum parental lines for a gene to be included
+- `--mapping-threshold`: Threshold for allele-specific mapping accuracy
+- `--min-reads-per-plant`: Minimum total reads per individual
+- `--homozygous-threshold`: Threshold for homozygous genotype calls
+- `--het-maf`: Minor allele frequency threshold for heterozygous calls
+
+#### Phenotype Generation
+
+Generate normalized phenotype files for QTL analysis:
+
+- Applies Box-Cox transformation for normalization
+- Creates cross-specific phenotype files
+- Calculates summary statistics per gene
+- Filters samples based on read depth
+
+#### QTL Input Preparation
+
+Prepare files in R/qtl format:
+
+- Converts genotype data to R/qtl format
+- Creates phenotype matrices for each gene group
+- Generates genetic maps with marker positions
+- Outputs ready-to-use R/qtl input files
+
+### Advanced Configuration
+
+#### SLURM Integration
+
+For HPC environments, the pipeline supports SLURM job submission:
+
+```bash
+python SalmonStreamer.py RunQTL \
+    --phenofile-path phenotypes.txt \
+    --genfile-path genotypes.txt \
+    --outdir-base ./results \
+    --partition your_partition \
+    --cpus-per-task 4 \
+    --mem-per-cpu 8G \
+    --max-concurrent-jobs 1000
+```
+
+#### Quality Control Parameters
+
+PCA-based quality control with customizable parameters:
+
+```bash
+python SalmonStreamer.py PCA_QC \
+    --input-data expression_data.txt \
+    --label-rules-file label_config.json \
+    --iqr-multiplier 2.0 \
+    --pc-to-retain 10 \
+    --genes-as-rows
+```
+
+### Input File Formats
+
+#### Label Rules JSON
+For PCA quality control, create a JSON file defining sample groupings:
+
+```json
+{
+    "source_patterns": {
+        "IM767": ["767"],
+        "Alternative": ["ALT", "SWB", "SF"]
+    },
+    "group_patterns": {
+        "Parent": ["parent", "P"],
+        "F1": ["f1", "F1"],
+        "F2": ["f2", "F2"]
+    }
+}
+```
+
+#### Genes Mapping File
+Tab-delimited file mapping genes between assemblies:
+```
+Chrom	stpos	endpos	old_name	new_name	62	155	444	502	541	664	909	1034	1192	scored_pops	new_chrom	new_start	new_end
+Chr_01	13982	16715	MiIM7v11000002m.g	MgIM767.01G000100	yes	yes	no	no	yes	no	yes	yes	no	5	Chr_01	13982	16715
+```
+
+#### Sample Information File
+Tab-delimited file defining sample types:
+```
+sample_id	type
+J-P-001	SF
+s4_62-107	f2
+767-032	IM767
+```
+
+### Output Files
+
+#### Genotype Processing
+- `{cross}.marker.genes.txt`: List of high-quality marker genes
+- `{cross}.F2_geno_PP.txt`: Genotype posterior probabilities
+- `PC1.{cross}/CleanedCalls.stringent.{cross}.{chrom}`: Cleaned genotype calls
+- `estimates.{cross}.{chrom}`: Error and recombination rate estimates
+
+#### Phenotype Generation  
+- `pfiles/f2_p_{gene_id}`: Individual gene phenotype files
+- `f2summaries_by_gene.txt`: Summary statistics per gene
+
+#### QTL Inputs
+- `{cross}.rQTL.genotype.txt`: R/qtl format genotype file
+- `{phenotype_group}_{cross}.txt`: Cross-specific phenotype matrices
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Memory Errors**: Increase `--memory` parameter for large datasets
+2. **Missing Dependencies**: Ensure all required software is installed and in PATH
+3. **File Format Issues**: Check that input files match expected formats
+4. **Permission Errors**: Ensure write permissions in output directories
+
+### Getting Help
+
+For detailed help on any subcommand:
+```bash
+python SalmonStreamer.py <subcommand> --help
+```
+
+View all available subcommands:
+```bash
+python SalmonStreamer.py --help
+```
+
+### Performance Tips
+
+1. **Use Multiple Threads**: Set `--threads` to number of available CPU cores
+2. **Optimize Memory**: Adjust `--memory` based on dataset size and available RAM
+3. **Batch Processing**: For many samples, consider splitting into smaller batches
+4. **Storage**: Use fast storage (SSD) for intermediate files when possible
+
+## Citation
+
+If you use Salmon Streamer in your research, please cite:
+
+```
+Salmon Streamer: A comprehensive pipeline for RNA-seq to QTL analysis
+Authors: Luis Javier Madrigal Roca, Paris Veltsos, John K. Kelly
+```
+
+## License
+
+This project is licensed under the terms specified in the LICENSE file.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
+
+## Changelog
+
+### Version 1.0.0
+- Initial release with complete RNA-seq to QTL pipeline
+- Integrated genotype calling from transcript mapping
+- Automated phenotype generation and QTL input preparation
+- SLURM integration for HPC environments
+- Comprehensive quality control and filtering options
 
 The `salmon_runner.py` script takes several arguments to configure the pipeline. Below is an example of how to run it:
 
