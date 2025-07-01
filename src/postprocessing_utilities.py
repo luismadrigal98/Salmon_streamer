@@ -12,13 +12,6 @@ import os
 import pandas as pd
 import numpy as np
 
-# Go to the subprograms directory to import the necessary functions
-# This is necessary to avoid circular imports (subprograms is a sibling directory)
-
-from ..subprograms.TranslateSalmon import main as translate_salmon_main
-from ..subprograms.CalculateRawReads import main as calculate_raw_reads_main
-from ..subprograms.CalculateCPM import main as calculate_cpm_main
-
 def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', includes_alternative_genome = False):
     """
     Combine all Salmon quantification results into one table.
@@ -321,7 +314,18 @@ def process_post_pipeline(args):
     Run the complete post-processing pipeline: TranslateSalmon -> CalculateRawReads -> CalculateCPM
     """
     import os
+    import sys
     from argparse import Namespace
+    
+    # Add parent directory to path for imports
+    parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    
+    # Import the functions locally to avoid circular imports
+    from subprograms.TranslateSalmon import main as translate_salmon_main
+    from subprograms.CalculateRawReads import main as calculate_raw_reads_main
+    from subprograms.CalculateCPM import main as calculate_cpm_main
     
     print("Running complete post-processing pipeline...")
     

@@ -29,6 +29,7 @@ from subprograms.TranslateSalmon import main as translate_salmon_main
 from subprograms.CalculateRawReads import main as calculate_raw_reads_main
 from subprograms.CalculateCPM import main as calculate_cpm_main
 from src.postprocessing_utilities import process_post_pipeline
+from src.postprocessing_utilities import process_post_pipeline
 
 def main():
     # Create the main parser
