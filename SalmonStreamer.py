@@ -28,6 +28,9 @@ from subprograms.QTL_runner import main as qtl_runner_main
 from subprograms.TranslateSalmon import main as translate_salmon_main
 from subprograms.CalculateRawReads import main as calculate_raw_reads_main
 from subprograms.CalculateCPM import main as calculate_cpm_main
+from subprograms.ProcessGenotypes import main as process_genotypes_main
+from subprograms.MakePhenotypes import main as make_phenotypes_main
+from subprograms.PrepareQTLInputs import main as prepare_qtl_inputs_main
 from src.postprocessing_utilities import process_post_pipeline
 from src.postprocessing_utilities import process_post_pipeline
 
@@ -235,6 +238,72 @@ def main():
     process_post_parser.add_argument('--output-dir', default='.',
                                     help='Output directory (default: current directory)')
     
+    # --- Add ProcessGenotypes Subcommand ---
+    genotypes_parser = subparsers.add_parser('ProcessGenotypes', help='Process genotypes from transcript mapping data')
+    genotypes_parser.add_argument('--cross', required=True,
+                                 help='Cross identifier (e.g., SWB, SF, 1034)')
+    genotypes_parser.add_argument('--allele-counts-file', required=True,
+                                 help='Path to allele counts file (e.g., allele_counts.combined.updated767.CROSS.txt)')
+    genotypes_parser.add_argument('--samples-file', required=True,
+                                 help='Path to samples file (e.g., CROSS.combined.samples.txt)')
+    genotypes_parser.add_argument('--genes-file', required=True,
+                                 help='Path to genes mapping file (e.g., Genes_to_updated_767_assembly.txt)')
+    genotypes_parser.add_argument('--min-parental-lines', type=int, default=5,
+                                 help='Minimum parental lines called (default: 5)')
+    genotypes_parser.add_argument('--mapping-threshold', type=float, default=0.95,
+                                 help='Minimum frequency of mapping to correct allele (default: 0.95)')
+    genotypes_parser.add_argument('--min-reads-per-plant', type=int, default=100000,
+                                 help='Minimum reads per plant (default: 100000)')
+    genotypes_parser.add_argument('--min-reads-per-call', type=int, default=6,
+                                 help='Minimum reads to count an F2 call (default: 6)')
+    genotypes_parser.add_argument('--f2-fraction-threshold', type=float, default=0.5,
+                                 help='Fraction of F2s required (default: 0.5)')
+    genotypes_parser.add_argument('--homozygous-threshold', type=float, default=0.95,
+                                 help='Homozygous calling threshold (default: 0.95)')
+    genotypes_parser.add_argument('--het-maf', type=float, default=0.25,
+                                 help='Heterozygous calling MAF threshold (default: 0.25)')
+    genotypes_parser.add_argument('--output-dir', default='.',
+                                 help='Output directory (default: current directory)')
+    
+    # --- Add MakePhenotypes Subcommand ---
+    phenotypes_parser = subparsers.add_parser('MakePhenotypes', help='Generate phenotype files from expression data')
+    phenotypes_parser.add_argument('--genes-by-cross-file', required=True,
+                                  help='Path to genes by cross file (e.g., Genes_by_cross.txt)')
+    phenotypes_parser.add_argument('--total-reads-files', nargs='+', required=True,
+                                  help='List of total reads files for each cross (e.g., Total_reads_byplant.SF)')
+    phenotypes_parser.add_argument('--readcounts-files', nargs='+', required=True,
+                                  help='List of readcounts files for each cross')
+    phenotypes_parser.add_argument('--f2-lists', nargs='+', required=True,
+                                  help='List of F2 inclusion files (e.g., SF.included.f2s.txt)')
+    phenotypes_parser.add_argument('--crosses', nargs='+', required=True,
+                                  help='List of cross identifiers')
+    phenotypes_parser.add_argument('--im-lines', nargs='+', 
+                                  default=["62","155","444","502","541","664","909","1034","1192"],
+                                  help='List of inbred line identifiers')
+    phenotypes_parser.add_argument('--output-dir', default='pfiles',
+                                  help='Output directory for phenotype files (default: pfiles)')
+    phenotypes_parser.add_argument('--summary-file', default='f2summaries_by_gene.txt',
+                                  help='Summary output file (default: f2summaries_by_gene.txt)')
+    
+    # --- Add PrepareQTLInputs Subcommand ---
+    qtl_inputs_parser = subparsers.add_parser('PrepareQTLInputs', help='Prepare inputs for QTL analysis')
+    qtl_inputs_parser.add_argument('--cross', required=True,
+                                  help='Cross identifier (e.g., SWB, SF, 1034)')
+    qtl_inputs_parser.add_argument('--genotype-pp-file', required=True,
+                                  help='Path to genotype posterior probabilities file (e.g., CROSS.F2_geno_PP.txt)')
+    qtl_inputs_parser.add_argument('--estimates-files', nargs='+', required=True,
+                                  help='List of estimates files for each chromosome')
+    qtl_inputs_parser.add_argument('--genes-by-cross-file', required=True,
+                                  help='Path to genes by cross file')
+    qtl_inputs_parser.add_argument('--phenotype-group', required=True,
+                                  help='Phenotype group identifier (e.g., gene.group1)')
+    qtl_inputs_parser.add_argument('--phenotype-files-dir', default='pfiles',
+                                  help='Directory containing phenotype files (default: pfiles)')
+    qtl_inputs_parser.add_argument('--output-dir', default='rQTL_files',
+                                  help='Output directory for R/qtl files (default: rQTL_files)')
+    qtl_inputs_parser.add_argument('--chromosomes', nargs='+', type=int, default=list(range(1, 15)),
+                                  help='List of chromosome numbers (default: 1-14)')
+    
     # Parse arguments
     args = parser.parse_args()
     
@@ -263,6 +332,12 @@ def main():
     elif args.command == 'ProcessPost':
         # Run the complete post-processing pipeline
         process_post_pipeline(args)
+    elif args.command == 'ProcessGenotypes':
+        process_genotypes_main(args)
+    elif args.command == 'MakePhenotypes':
+        make_phenotypes_main(args)
+    elif args.command == 'PrepareQTLInputs':
+        prepare_qtl_inputs_main(args)
     else:
         parser.print_help()
 
