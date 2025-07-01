@@ -28,6 +28,7 @@ from subprograms.QTL_runner import main as qtl_runner_main
 from subprograms.TranslateSalmon import main as translate_salmon_main
 from subprograms.CalculateRawReads import main as calculate_raw_reads_main
 from subprograms.CalculateCPM import main as calculate_cpm_main
+from src.postprocessing_utilities import process_post_pipeline
 
 def main():
     # Create the main parser
@@ -263,65 +264,6 @@ def main():
         process_post_pipeline(args)
     else:
         parser.print_help()
-
-
-def process_post_pipeline(args):
-    """
-    Run the complete post-processing pipeline: TranslateSalmon -> CalculateRawReads -> CalculateCPM
-    """
-    import os
-    from argparse import Namespace
-    
-    print("Running complete post-processing pipeline...")
-    
-    # Change to output directory
-    original_dir = os.getcwd()
-    if args.output_dir != '.':
-        os.makedirs(args.output_dir, exist_ok=True)
-        os.chdir(args.output_dir)
-    
-    try:
-        # Step 1: Run TranslateSalmon for each cross
-        salmon_output_files = []
-        for i, cross in enumerate(args.crosses):
-            translate_args = Namespace(
-                cross=cross,
-                genes_file=args.genes_file,
-                quant_results_file=args.quant_results_files[i],
-                output_file=f"Salmon_outputs.IMlines.updated767.{cross}.txt"
-            )
-            print(f"Step 1.{i+1}: Translating Salmon outputs for cross {cross}")
-            translate_salmon_main(translate_args)
-            salmon_output_files.append(translate_args.output_file)
-        
-        # Step 2: Calculate raw reads per plant
-        raw_reads_args = Namespace(
-            salmon_files=salmon_output_files,
-            output_file="raw.reads.per.plant.txt"
-        )
-        print("Step 2: Calculating raw reads per plant")
-        calculate_raw_reads_main(raw_reads_args)
-        
-        # Step 3: Calculate CPM for PCA
-        cpm_args = Namespace(
-            raw_reads_file="raw.reads.per.plant.txt",
-            salmon_files=salmon_output_files,
-            cpm_min=args.cpm_min,
-            output_file="RawSamples_forPCA"
-        )
-        print("Step 3: Calculating CPM for PCA analysis")
-        calculate_cpm_main(cpm_args)
-        
-        print("Post-processing pipeline completed successfully!")
-        print("Output files:")
-        for file in salmon_output_files:
-            print(f"  - {file}")
-        print("  - raw.reads.per.plant.txt")
-        print("  - RawSamples_forPCA")
-        
-    finally:
-        # Return to original directory
-        os.chdir(original_dir)
 
 if __name__ == "__main__":
     main()

@@ -11,7 +11,9 @@ import subprocess
 import os
 import pandas as pd
 import numpy as np
-
+from subprograms.TranslateSalmon import main as translate_salmon_main
+from subprograms.CalculateRawReads import main as calculate_raw_reads_main
+from subprograms.CalculateCPM import main as calculate_cpm_main
 
 def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', includes_alternative_genome = False):
     """
@@ -92,7 +94,6 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', include
         # Write the combined table to a file
         combined_df.to_csv(result_name, sep='\t', index=False)
 
-
 def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file):
     """
     Take salmon outputs (QUANT) and organize read counts to each allele of each gene per sample.
@@ -171,7 +172,6 @@ def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file)
     
     print(f"Processed {cross}: Found {fn[0]}, Not found {fn[1]}")
 
-
 def calculate_raw_reads_per_plant(salmon_files, output_file):
     """
     Calculate total reads per plant from multiple Salmon output files.
@@ -222,7 +222,6 @@ def calculate_raw_reads_per_plant(salmon_files, output_file):
     with open(output_file, "w") as out1:
         for plt in data:
             out1.write(f"{plt}\t{data[plt]}\n")
-
 
 def calculate_cpm_for_pca(raw_reads_file, salmon_files, cpm_min, output_file):
     """
@@ -312,3 +311,61 @@ def calculate_cpm_for_pca(raw_reads_file, salmon_files, cpm_min, output_file):
                     for plt in data[geneid]:
                         out1.write(f'\t{data[geneid][plt]}')
                     out1.write('\n')
+
+def process_post_pipeline(args):
+    """
+    Run the complete post-processing pipeline: TranslateSalmon -> CalculateRawReads -> CalculateCPM
+    """
+    import os
+    from argparse import Namespace
+    
+    print("Running complete post-processing pipeline...")
+    
+    # Change to output directory
+    original_dir = os.getcwd()
+    if args.output_dir != '.':
+        os.makedirs(args.output_dir, exist_ok=True)
+        os.chdir(args.output_dir)
+    
+    try:
+        # Step 1: Run TranslateSalmon for each cross
+        salmon_output_files = []
+        for i, cross in enumerate(args.crosses):
+            translate_args = Namespace(
+                cross=cross,
+                genes_file=args.genes_file,
+                quant_results_file=args.quant_results_files[i],
+                output_file=f"Salmon_outputs.IMlines.updated767.{cross}.txt"
+            )
+            print(f"Step 1.{i+1}: Translating Salmon outputs for cross {cross}")
+            translate_salmon_main(translate_args)
+            salmon_output_files.append(translate_args.output_file)
+        
+        # Step 2: Calculate raw reads per plant
+        raw_reads_args = Namespace(
+            salmon_files=salmon_output_files,
+            output_file="raw.reads.per.plant.txt"
+        )
+        print("Step 2: Calculating raw reads per plant")
+        calculate_raw_reads_main(raw_reads_args)
+        
+        # Step 3: Calculate CPM for PCA
+        cpm_args = Namespace(
+            raw_reads_file="raw.reads.per.plant.txt",
+            salmon_files=salmon_output_files,
+            cpm_min=args.cpm_min,
+            output_file="RawSamples_forPCA"
+        )
+        print("Step 3: Calculating CPM for PCA analysis")
+        calculate_cpm_main(cpm_args)
+        
+        print("Post-processing pipeline completed successfully!")
+        print("Output files:")
+        for file in salmon_output_files:
+            print(f"  - {file}")
+        print("  - raw.reads.per.plant.txt")
+        print("  - RawSamples_forPCA")
+        
+    finally:
+        # Return to original directory
+        os.chdir(original_dir)
