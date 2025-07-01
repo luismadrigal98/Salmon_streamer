@@ -10,6 +10,8 @@ Set of functions to postprocess the output files after using Salmon
 import subprocess
 import os
 import pandas as pd
+import numpy as np
+
 
 def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', includes_alternative_genome = False):
     """
@@ -89,3 +91,224 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', include
 
         # Write the combined table to a file
         combined_df.to_csv(result_name, sep='\t', index=False)
+
+
+def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file):
+    """
+    Take salmon outputs (QUANT) and organize read counts to each allele of each gene per sample.
+    
+    Parameters
+    ----------
+    cross : str
+        Cross identifier (e.g., SWB, SF)
+    genes_file : str
+        Path to genes mapping file (e.g., Genes_to_updated_767_assembly.txt)
+    quant_results_file : str
+        Path to QUANT results file
+    output_file : str
+        Output file path
+        
+    Returns
+    -------
+    None
+    """
+    
+    print(f"Processing cross: {cross}")
+    
+    # Load included genes
+    includedgenes = {}
+    with open(genes_file, "r") as inx:
+        for line_id, liner in enumerate(inx):
+            colx = liner.replace('\n', '').split('\t')
+            # Chrom	stpos	endpos	old_name	new_name	62	155	444	502	541	664	909	1034	1192	scored_pops	new_chrom	new_start	new_end
+            includedgenes[colx[4] + ".v2.1"] = 1
+    
+    # Process QUANT results
+    data = {}
+    plants_in_sequence = []
+    fn = [0, 0]  # [found, not_found]
+    
+    with open(quant_results_file, "r") as src:
+        for line_idx, line in enumerate(src):
+            cols = line.replace('\n', '').split('\t')
+            if line_idx == 0:
+                # Header row - extract sample names
+                for j in range(1, len(cols)):
+                    plants_in_sequence.append(cols[j])
+            else:
+                # Data rows
+                gname = cols[0].split("=")[1]
+                try:
+                    nn = includedgenes[gname]
+                    fn[0] += 1
+                    try:
+                        ux = data[gname]
+                    except KeyError:
+                        data[gname] = {"IM767": [], cross: []}
+                    
+                    allele = cols[0].split("_")[0]
+                    
+                    for j in range(1, len(cols)):
+                        data[gname][allele].append(cols[j])
+                        
+                except KeyError:
+                    fn[1] += 1
+    
+    # Write output
+    with open(output_file, "w") as out1:
+        out1.write("GeneID")
+        for j in range(len(plants_in_sequence)):
+            out1.write(f"\t767_{plants_in_sequence[j]}")
+            out1.write(f"\t{cross}_{plants_in_sequence[j]}")
+        out1.write("\n")
+        
+        for gname in data:
+            out1.write(gname)
+            for j in range(len(plants_in_sequence)):
+                out1.write(f"\t{data[gname]['IM767'][j]}")
+                out1.write(f"\t{data[gname][cross][j]}")
+            out1.write("\n")
+    
+    print(f"Processed {cross}: Found {fn[0]}, Not found {fn[1]}")
+
+
+def calculate_raw_reads_per_plant(salmon_files, output_file):
+    """
+    Calculate total reads per plant from multiple Salmon output files.
+    
+    Parameters
+    ----------
+    salmon_files : list
+        List of Salmon output files
+    output_file : str
+        Output file path
+        
+    Returns
+    -------
+    None
+    """
+    
+    data = {}
+    
+    for salmon_file in salmon_files:
+        # Determine cross type from filename
+        if "SWB" in salmon_file:
+            cross_prefix = "SWBcross_"
+        elif "SF" in salmon_file:
+            cross_prefix = "SFcross_"
+        else:
+            # Extract cross from filename pattern
+            cross_name = salmon_file.split(".")[-2]  # Assumes pattern like ...updated767.CROSS.txt
+            cross_prefix = f"{cross_name}cross_"
+        
+        relevant_numbers = {}
+        
+        with open(salmon_file, "r") as src:
+            for line_idx, line in enumerate(src):
+                cols = line.replace('\n', '').split('\t')
+                if line_idx == 0:
+                    # Header row - extract sample positions
+                    for j in range(1, len(cols), 2):
+                        plt = cross_prefix + cols[j][4:]  # Remove "767_" prefix
+                        relevant_numbers[plt] = [j, j+1]
+                        data[plt] = 0.0  # Initialize sum of all reads
+                else:
+                    # Data rows - sum reads for each plant
+                    for plt in relevant_numbers:
+                        data[plt] += (float(cols[relevant_numbers[plt][0]]) + 
+                                    float(cols[relevant_numbers[plt][1]]))
+    
+    # Write output
+    with open(output_file, "w") as out1:
+        for plt in data:
+            out1.write(f"{plt}\t{data[plt]}\n")
+
+
+def calculate_cpm_for_pca(raw_reads_file, salmon_files, cpm_min, output_file):
+    """
+    Standardize raw reads to CPM (Counts Per Million) for PCA analysis.
+    
+    Parameters
+    ----------
+    raw_reads_file : str
+        Path to raw reads per plant file
+    salmon_files : list
+        List of Salmon output files
+    cpm_min : float
+        Minimum CPM threshold
+    output_file : str
+        Output file path
+        
+    Returns
+    -------
+    None
+    """
+    
+    # Load read counts per plant
+    reads = {}
+    with open(raw_reads_file, "r") as in1:
+        for line_idxx, liner in enumerate(in1):
+            colx = liner.replace('\n', '').split('\t')
+            sd = colx[0]
+            reads[sd] = float(colx[1])
+    
+    data = {}
+    nx = 0
+    lastg = None
+    
+    # Process each salmon file
+    for salmon_file in salmon_files:
+        # Determine cross type from filename
+        if "SWB" in salmon_file:
+            cross_prefix = "SWBcross_"
+        elif "SF" in salmon_file:
+            cross_prefix = "SFcross_"
+        else:
+            # Extract cross from filename pattern
+            cross_name = salmon_file.split(".")[-2]
+            cross_prefix = f"{cross_name}cross_"
+        
+        relevant_numbers = {}
+        
+        with open(salmon_file, "r") as src:
+            for line_idx, line in enumerate(src):
+                cols = line.replace('\n', '').split('\t')
+                if line_idx == 0:
+                    # Header row
+                    for j in range(1, len(cols), 2):
+                        nx += 1
+                        plt = cross_prefix + cols[j][4:]
+                        relevant_numbers[plt] = [j, j+1]
+                else:
+                    # Data rows - calculate CPM
+                    geneid = cols[0]
+                    if geneid not in data:
+                        data[geneid] = {}
+                    
+                    lastg = geneid
+                    for plt in relevant_numbers:
+                        raw_count = (float(cols[relevant_numbers[plt][0]]) + 
+                                   float(cols[relevant_numbers[plt][1]]))
+                        data[geneid][plt] = raw_count * 1000000.0 / reads[plt]
+    
+    # Write output
+    with open(output_file, "w") as out1:
+        # Write header
+        out1.write("geneid")
+        if lastg:
+            for plt in data[lastg]:
+                out1.write(f'\t{plt}')
+        out1.write('\n')
+        
+        # Write data for genes that meet criteria
+        for geneid in data:
+            if len(data[geneid]) == nx:  # Gene present in both crosses
+                sreads = []
+                for plt in data[geneid]:
+                    sreads.append(data[geneid][plt])
+                
+                if np.average(sreads) >= cpm_min:  # Gene meets minimum CPM threshold
+                    out1.write(geneid)
+                    for plt in data[geneid]:
+                        out1.write(f'\t{data[geneid][plt]}')
+                    out1.write('\n')

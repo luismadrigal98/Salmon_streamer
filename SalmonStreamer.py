@@ -24,7 +24,10 @@ from subprograms.voom_from_salmon import main as voom_main
 from subprograms.AnnTransfer import main as ann_transfer_main
 from subprograms.GenerateTranscriptome import main as generate_transcriptome
 from subprograms.RunPCA import main as run_pca_qc_main
-from subprograms.QTL_runner import main as qtl_runner_main  # Add this import
+from subprograms.QTL_runner import main as qtl_runner_main
+from subprograms.TranslateSalmon import main as translate_salmon_main
+from subprograms.CalculateRawReads import main as calculate_raw_reads_main
+from subprograms.CalculateCPM import main as calculate_cpm_main
 
 def main():
     # Create the main parser
@@ -189,6 +192,47 @@ def main():
     qtl_parser.add_argument('--job-completion-stringency', type=float, default=0.75,
                             help="Required fraction of successful jobs (default: 0.75)")
     
+    # --- Add TranslateSalmon Subcommand ---
+    translate_parser = subparsers.add_parser('TranslateSalmon', help='Translate Salmon outputs and organize read counts by allele')
+    translate_parser.add_argument('cross', help='Cross identifier (e.g., SWB, SF)')
+    translate_parser.add_argument('--genes-file', required=True, 
+                                 help='Path to genes mapping file (e.g., Genes_to_updated_767_assembly.txt)')
+    translate_parser.add_argument('--quant-results-file', required=True,
+                                 help='Path to QUANT results file (e.g., QUANT_RESULTS_767_vs_SWB)')
+    translate_parser.add_argument('--output-file', 
+                                 help='Output file path (default: Salmon_outputs.IMlines.updated767.[cross].txt)')
+    
+    # --- Add CalculateRawReads Subcommand ---
+    raw_reads_parser = subparsers.add_parser('CalculateRawReads', help='Calculate raw reads per plant from Salmon outputs')
+    raw_reads_parser.add_argument('--salmon-files', nargs='+', required=True,
+                                 help='List of Salmon output files (e.g., Salmon_outputs.IMlines.updated767.SWB.txt)')
+    raw_reads_parser.add_argument('--output-file', default='raw.reads.per.plant.txt',
+                                 help='Output file path (default: raw.reads.per.plant.txt)')
+    
+    # --- Add CalculateCPM Subcommand ---
+    cpm_parser = subparsers.add_parser('CalculateCPM', help='Calculate CPM for PCA analysis')
+    cpm_parser.add_argument('--raw-reads-file', required=True,
+                           help='Path to raw reads per plant file (e.g., raw.reads.per.plant.txt)')
+    cpm_parser.add_argument('--salmon-files', nargs='+', required=True,
+                           help='List of Salmon output files (e.g., Salmon_outputs.IMlines.updated767.SWB.txt)')
+    cpm_parser.add_argument('--cpm-min', type=float, default=5.0,
+                           help='Minimum CPM threshold (default: 5.0)')
+    cpm_parser.add_argument('--output-file', default='RawSamples_forPCA',
+                           help='Output file path (default: RawSamples_forPCA)')
+    
+    # --- Add ProcessPost Subcommand (Combined pipeline) ---
+    process_post_parser = subparsers.add_parser('ProcessPost', help='Run complete post-processing pipeline (TranslateSalmon + CalculateRawReads + CalculateCPM)')
+    process_post_parser.add_argument('--crosses', nargs='+', required=True,
+                                    help='List of cross identifiers (e.g., SWB SF)')
+    process_post_parser.add_argument('--genes-file', required=True,
+                                    help='Path to genes mapping file (e.g., Genes_to_updated_767_assembly.txt)')
+    process_post_parser.add_argument('--quant-results-files', nargs='+', required=True,
+                                    help='List of QUANT results files (in same order as crosses)')
+    process_post_parser.add_argument('--cpm-min', type=float, default=5.0,
+                                    help='Minimum CPM threshold (default: 5.0)')
+    process_post_parser.add_argument('--output-dir', default='.',
+                                    help='Output directory (default: current directory)')
+    
     # Parse arguments
     args = parser.parse_args()
     
@@ -208,8 +252,76 @@ def main():
         voom_main(args)
     elif args.command == 'RunQTL':
         qtl_runner_main(args)  # Call the QTL runner main function
+    elif args.command == 'TranslateSalmon':
+        translate_salmon_main(args)
+    elif args.command == 'CalculateRawReads':
+        calculate_raw_reads_main(args)
+    elif args.command == 'CalculateCPM':
+        calculate_cpm_main(args)
+    elif args.command == 'ProcessPost':
+        # Run the complete post-processing pipeline
+        process_post_pipeline(args)
     else:
         parser.print_help()
+
+
+def process_post_pipeline(args):
+    """
+    Run the complete post-processing pipeline: TranslateSalmon -> CalculateRawReads -> CalculateCPM
+    """
+    import os
+    from argparse import Namespace
+    
+    print("Running complete post-processing pipeline...")
+    
+    # Change to output directory
+    original_dir = os.getcwd()
+    if args.output_dir != '.':
+        os.makedirs(args.output_dir, exist_ok=True)
+        os.chdir(args.output_dir)
+    
+    try:
+        # Step 1: Run TranslateSalmon for each cross
+        salmon_output_files = []
+        for i, cross in enumerate(args.crosses):
+            translate_args = Namespace(
+                cross=cross,
+                genes_file=args.genes_file,
+                quant_results_file=args.quant_results_files[i],
+                output_file=f"Salmon_outputs.IMlines.updated767.{cross}.txt"
+            )
+            print(f"Step 1.{i+1}: Translating Salmon outputs for cross {cross}")
+            translate_salmon_main(translate_args)
+            salmon_output_files.append(translate_args.output_file)
+        
+        # Step 2: Calculate raw reads per plant
+        raw_reads_args = Namespace(
+            salmon_files=salmon_output_files,
+            output_file="raw.reads.per.plant.txt"
+        )
+        print("Step 2: Calculating raw reads per plant")
+        calculate_raw_reads_main(raw_reads_args)
+        
+        # Step 3: Calculate CPM for PCA
+        cpm_args = Namespace(
+            raw_reads_file="raw.reads.per.plant.txt",
+            salmon_files=salmon_output_files,
+            cpm_min=args.cpm_min,
+            output_file="RawSamples_forPCA"
+        )
+        print("Step 3: Calculating CPM for PCA analysis")
+        calculate_cpm_main(cpm_args)
+        
+        print("Post-processing pipeline completed successfully!")
+        print("Output files:")
+        for file in salmon_output_files:
+            print(f"  - {file}")
+        print("  - raw.reads.per.plant.txt")
+        print("  - RawSamples_forPCA")
+        
+    finally:
+        # Return to original directory
+        os.chdir(original_dir)
 
 if __name__ == "__main__":
     main()
