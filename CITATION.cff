@@ -3,8 +3,8 @@ message: "If you use this software, please cite it as below."
 type: software
 title: "Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis"
 version: 1.0.0
-doi: 10.5281/zenodo.XXXXXXX
-date-released: 2025-01-01
+doi: 10.5281/zenodo.15800356
+date-released: 2025-07-03
 url: "https://github.com/luismadrigal98/Salmon_streamer"
 repository-code: "https://github.com/luismadrigal98/Salmon_streamer"
 abstract: >-
