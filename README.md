@@ -447,13 +447,13 @@ Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
 
 ### Author Information and ORCIDs
 - **Luis Javier Madrigal-Roca** - University of Kansas  
-  ORCID: [0000-0000-0000-0000](https://orcid.org/0000-0000-0000-0000)
+  ORCID: [0000-0002-5485-6395](https://orcid.org/0000-0002-5485-6395)
   
-- **Paris Veltsos** - University of Liverpool  
-  ORCID: [0000-0000-0000-0000](https://orcid.org/0000-0000-0000-0000)
+- **Paris Veltsos** - Vrije Universiteit Brussel  
+  ORCID: [0000-0002-8872-6281](https://orcid.org/0000-0002-8872-6281)
   
 - **John K. Kelly** - University of Kansas  
-  ORCID: [0000-0000-0000-0000](https://orcid.org/0000-0000-0000-0000)
+  ORCID: [0000-0001-9480-1252](https://orcid.org/0000-0001-9480-1252)
 
 ### Related Publications
 If you use specific components of the pipeline, please also consider citing the underlying tools:
