@@ -5,17 +5,17 @@
     {
       "name": "Madrigal-Roca, Luis Javier",
       "affiliation": "University of Kansas",
-      "orcid": "https://orcid.org/0000-0002-5485-6395"
+      "orcid": "0000-0002-5485-6395"
     },
     {
       "name": "Veltsos, Paris",
       "affiliation": "Vrije Universiteit Brussel",
-      "orcid": "https://orcid.org/0000-0002-8872-6281"
+      "orcid": "0000-0002-8872-6281"
     },
     {
       "name": "Kelly, John K.",
       "affiliation": "University of Kansas",
-      "orcid": "https://orcid.org/0000-0001-9480-1252"
+      "orcid": "0000-0001-9480-1252"
     }
   ],
   "keywords": [
@@ -30,18 +30,13 @@
     "quantitative genetics",
     "pipeline"
   ],
-  "license": "MIT",
+  "license": {"id": "MIT"},
   "upload_type": "software",
   "access_right": "open",
   "language": "eng",
   "communities": [
     {
       "identifier": "zenodo"
-    }
-  ],
-  "grants": [
-    {
-      "id": "00000000"
     }
   ],
   "related_identifiers": [
