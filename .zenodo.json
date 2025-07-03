@@ -1,0 +1,73 @@
+{
+  "title": "Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis",
+  "description": "A complete bioinformatics pipeline for RNA-seq data analysis, from initial quantification through genotype/phenotype processing and QTL input preparation. The pipeline integrates multiple tools and analysis steps into a unified command-line interface, enabling allele-specific expression analysis, genotype calling from transcript mapping data, and automated QTL analysis preparation.",
+  "creators": [
+    {
+      "name": "Madrigal-Roca, Luis Javier",
+      "affiliation": "University of Kansas",
+      "orcid": "https://orcid.org/0000-0002-5485-6395"
+    },
+    {
+      "name": "Veltsos, Paris",
+      "affiliation": "Vrije Universiteit Brussel",
+      "orcid": "https://orcid.org/0000-0002-8872-6281"
+    },
+    {
+      "name": "Kelly, John K.",
+      "affiliation": "University of Kansas",
+      "orcid": "https://orcid.org/0000-0001-9480-1252"
+    }
+  ],
+  "keywords": [
+    "RNA-seq",
+    "QTL analysis",
+    "bioinformatics",
+    "genomics",
+    "allele-specific expression",
+    "genotype calling",
+    "salmon",
+    "transcriptomics",
+    "quantitative genetics",
+    "pipeline"
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "access_right": "open",
+  "language": "eng",
+  "communities": [
+    {
+      "identifier": "zenodo"
+    }
+  ],
+  "grants": [
+    {
+      "id": "00000000"
+    }
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/luismadrigal98/Salmon_streamer",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "version": "1.0.0",
+  "subjects": [
+    {
+      "term": "Bioinformatics",
+      "scheme": "mesh"
+    },
+    {
+      "term": "Genomics", 
+      "scheme": "mesh"
+    },
+    {
+      "term": "Gene Expression Profiling",
+      "scheme": "mesh"
+    },
+    {
+      "term": "Quantitative Trait Loci",
+      "scheme": "mesh"
+    }
+  ]
+}

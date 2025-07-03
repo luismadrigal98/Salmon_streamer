@@ -1,0 +1,124 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis"
+version: 1.0.0
+doi: 10.5281/zenodo.XXXXXXX
+date-released: 2025-01-01
+url: "https://github.com/luismadrigal98/Salmon_streamer"
+repository-code: "https://github.com/luismadrigal98/Salmon_streamer"
+abstract: >-
+  A complete bioinformatics pipeline for RNA-seq data analysis, from initial 
+  quantification through genotype/phenotype processing and QTL input preparation. 
+  The pipeline integrates multiple tools and analysis steps into a unified 
+  command-line interface, enabling allele-specific expression analysis, genotype 
+  calling from transcript mapping data, and automated QTL analysis preparation.
+keywords:
+  - RNA-seq
+  - QTL analysis
+  - bioinformatics
+  - genomics
+  - allele-specific expression
+  - genotype calling
+  - salmon
+  - transcriptomics
+  - quantitative genetics
+  - pipeline
+license: MIT
+authors:
+  - given-names: "Luis Javier"
+    family-names: "Madrigal-Roca"
+    email: "l338m483@ku.edu"
+    affiliation: "University of Kansas"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - given-names: "Paris"
+    family-names: "Veltsos"
+    email: "paris.veltsos@liverpool.ac.uk"
+    affiliation: "University of Liverpool"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - given-names: "John K."
+    family-names: "Kelly"
+    email: "jkk@ku.edu"
+    affiliation: "University of Kansas"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+contact:
+  - given-names: "Luis Javier"
+    family-names: "Madrigal-Roca"
+    email: "l338m483@ku.edu"
+preferred-citation:
+  type: software
+  title: "Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis"
+  authors:
+    - given-names: "Luis Javier"
+      family-names: "Madrigal-Roca"
+      email: "l338m483@ku.edu"
+      affiliation: "University of Kansas"
+      orcid: "https://orcid.org/0000-0000-0000-0000"
+    - given-names: "Paris"
+      family-names: "Veltsos"
+      email: "paris.veltsos@liverpool.ac.uk"
+      affiliation: "University of Liverpool"
+      orcid: "https://orcid.org/0000-0000-0000-0000"
+    - given-names: "John K."
+      family-names: "Kelly"
+      email: "jkk@ku.edu"
+      affiliation: "University of Kansas"
+      orcid: "https://orcid.org/0000-0000-0000-0000"
+  version: 1.0.0
+  doi: 10.5281/zenodo.XXXXXXX
+  date-released: 2025-01-01
+  url: "https://github.com/luismadrigal98/Salmon_streamer"
+  year: 2025
+references:
+  - type: article
+    title: "Salmon provides fast and bias-aware quantification of transcript expression"
+    authors:
+      - given-names: "Rob"
+        family-names: "Patro"
+      - given-names: "Geet"
+        family-names: "Duggal"
+      - given-names: "Michael I."
+        family-names: "Love"
+      - given-names: "Rafael A."
+        family-names: "Irizarry"
+      - given-names: "Carl"
+        family-names: "Kingsford"
+    journal: "Nature Methods"
+    volume: 14
+    issue: 4
+    start: 417
+    end: 419
+    year: 2017
+    doi: "10.1038/nmeth.4197"
+  - type: article
+    title: "Liftoff: accurate mapping of gene annotations"
+    authors:
+      - given-names: "Alaina"
+        family-names: "Shumate"
+      - given-names: "Steven L."
+        family-names: "Salzberg"
+    journal: "Bioinformatics"
+    volume: 37
+    issue: 12
+    start: 1639
+    end: 1643
+    year: 2021
+    doi: "10.1093/bioinformatics/btaa1016"
+  - type: article
+    title: "R/qtl: QTL mapping in experimental crosses"
+    authors:
+      - given-names: "Karl W."
+        family-names: "Broman"
+      - given-names: "Hao"
+        family-names: "Wu"
+      - given-names: "Śaunak"
+        family-names: "Sen"
+      - given-names: "Gary A."
+        family-names: "Churchill"
+    journal: "Bioinformatics"
+    volume: 19
+    issue: 7
+    start: 889
+    end: 890
+    year: 2003
+    doi: "10.1093/bioinformatics/btg112"

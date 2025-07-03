@@ -423,10 +423,46 @@ python SalmonStreamer.py --help
 
 If you use Salmon Streamer in your research, please cite:
 
+### Software Citation
 ```
-Salmon Streamer: A comprehensive pipeline for RNA-seq to QTL analysis
-Authors: Luis Javier Madrigal Roca, Paris Veltsos, John K. Kelly
+Madrigal-Roca, L.J., Veltsos, P., & Kelly, J.K. (2025). 
+Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis (Version 1.0.0) [Computer software]. 
+Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
 ```
+
+### BibTeX Format
+```bibtex
+@software{madrigal_roca_2025_salmon_streamer,
+  author       = {Madrigal-Roca, Luis Javier and
+                  Veltsos, Paris and
+                  Kelly, John K.},
+  title        = {Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis},
+  version      = {1.0.0},
+  publisher    = {Zenodo},
+  year         = {2025},
+  doi          = {10.5281/zenodo.XXXXXXX},
+  url          = {https://github.com/luismadrigal98/Salmon_streamer}
+}
+```
+
+### Author Information and ORCIDs
+- **Luis Javier Madrigal-Roca** - University of Kansas  
+  ORCID: [0000-0000-0000-0000](https://orcid.org/0000-0000-0000-0000)
+  
+- **Paris Veltsos** - University of Liverpool  
+  ORCID: [0000-0000-0000-0000](https://orcid.org/0000-0000-0000-0000)
+  
+- **John K. Kelly** - University of Kansas  
+  ORCID: [0000-0000-0000-0000](https://orcid.org/0000-0000-0000-0000)
+
+### Related Publications
+If you use specific components of the pipeline, please also consider citing the underlying tools:
+
+- **Salmon**: Patro, R., Duggal, G., Love, M. I., Irizarry, R. A., & Kingsford, C. (2017). Salmon provides fast and bias-aware quantification of transcript expression. Nature methods, 14(4), 417-419. DOI: [10.1038/nmeth.4197](https://doi.org/10.1038/nmeth.4197)
+
+- **Liftoff**: Shumate, A., & Salzberg, S. L. (2021). Liftoff: accurate mapping of gene annotations. Bioinformatics, 37(12), 1639-1643. DOI: [10.1093/bioinformatics/btaa1016](https://doi.org/10.1093/bioinformatics/btaa1016)
+
+- **R/qtl**: Broman, K. W., Wu, H., Sen, Ś., & Churchill, G. A. (2003). R/qtl: QTL mapping in experimental crosses. Bioinformatics, 19(7), 889-890. DOI: [10.1093/bioinformatics/btg112](https://doi.org/10.1093/bioinformatics/btg112)
 
 ## License
 
@@ -438,52 +474,44 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Changelog
 
-### Version 1.0.0
-- Initial release with complete RNA-seq to QTL pipeline
-- Integrated genotype calling from transcript mapping
-- Automated phenotype generation and QTL input preparation
-- SLURM integration for HPC environments
-- Comprehensive quality control and filtering options
+## Legacy Usage Information
+
+For reference, the original individual scripts can still be run separately:
+
+### Running the Salmon Pipeline
 
 The `salmon_runner.py` script takes several arguments to configure the pipeline. Below is an example of how to run it:
 
 ```sh
-python [salmon_runner.py](http://_vscodecontentref_/0) -i <input_directory> --transcriptome <transcriptome.fasta> --reference <reference_genome.fasta> --alternative <alternative_genome.fasta> --working_directory <working_directory> --output <output_directory>
-
-Arguments
--i, --input: Directory with the fastq files (required)
---transcriptome, --tf: Transcriptome in fasta format (required)
---reference, -r: Reference genome in fasta format (required)
---alternative, -a: Alternative genome in fasta format (required)
---working_directory, -w: Working directory (required)
---output, -o: Output directory (required)
---temporal_directory, --temp: Temporal directory (optional, default: ./TEMP)
---reference_name, -rn: Name of the reference genome (optional)
---alternative_name, -an: Name of the alternative genome (optional)
---salmon_index_options, -sio: Salmon index options as a single string (optional, default: --keepDuplicates -k 31)
---quant_options, -qo: Salmon quant options as a single string (optional, default: --noLengthCorrection -l U -p 1)
---threads, -t: Number of threads to use (optional, default: 1)
---chrom_level, -c: Whether to remove scaffolds and contigs from the genomes (optional, default: True)
---memory, -m: Memory to use in the cluster for individual quantification jobs (optional, default: 2)
---clean, -cl: Clean the temporal directory after the run (optional, default: False)
+python salmon_runner.py -i <input_directory> --transcriptome <transcriptome.fasta> --reference <reference_genome.fasta> --alternative <alternative_genome.fasta> --working_directory <working_directory> --output <output_directory>
 ```
 
-Combining Quantification Results
-The salmon_output_processor.py script combines the quantification results into a single table. Below is an example of how to run it:
+#### Arguments
+- `-i, --input`: Directory with the fastq files (required)
+- `--transcriptome, --tf`: Transcriptome in fasta format (required)
+- `--reference, -r`: Reference genome in fasta format (required)
+- `--alternative, -a`: Alternative genome in fasta format (required)
+- `--working_directory, -w`: Working directory (required)
+- `--output, -o`: Output directory (required)
+- `--temporal_directory, --temp`: Temporal directory (optional, default: ./TEMP)
+- `--reference_name, -rn`: Name of the reference genome (optional)
+- `--alternative_name, -an`: Name of the alternative genome (optional)
+- `--salmon_index_options, -sio`: Salmon index options as a single string (optional, default: --keepDuplicates -k 31)
+- `--quant_options, -qo`: Salmon quant options as a single string (optional, default: --noLengthCorrection -l U -p 1)
+- `--threads, -t`: Number of threads to use (optional, default: 1)
+- `--chrom_level, -c`: Whether to remove scaffolds and contigs from the genomes (optional, default: True)
+- `--memory, -m`: Memory to use in the cluster for individual quantification jobs (optional, default: 2)
+- `--clean, -cl`: Clean the temporal directory after the run (optional, default: False)
+
+### Combining Quantification Results
+
+The `salmon_output_processor.py` script combines the quantification results into a single table. Below is an example of how to run it:
 
 ```sh
-python [salmon_output_processor.py](http://_vscodecontentref_/1) -o <output_directory> --result_name <result_file_name>
-
-Arguments
--o, --output: Directory with the output of the Salmon pipeline (required)
---result_name, --rn: Name of the output file to store the combined results (optional, default: table.txt)
---mode, -m: Mode to run the commands. Options are "cmd" for command line and "python" for Python code (optional, default: cmd)
+python salmon_output_processor.py -o <output_directory> --result_name <result_file_name>
 ```
 
-# Authors
-Luis Javier Madrigal-Roca, 
-Paris Veltsos, 
-John K. Kelly
-
-# License
-This project is licensed under the MIT License.
+#### Arguments
+- `-o, --output`: Directory with the output of the Salmon pipeline (required)
+- `--result_name, --rn`: Name of the output file to store the combined results (optional, default: table.txt)
+- `--mode, -m`: Mode to run the commands. Options are "cmd" for command line and "python" for Python code (optional, default: cmd)
