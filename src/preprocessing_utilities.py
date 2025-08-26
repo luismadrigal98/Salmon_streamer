@@ -212,6 +212,13 @@ def run_salmon_index(transcriptome_genome, decoy_file, threads, output_dir, outp
 
     logging.info(f"Running Salmon index command: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
+    
+    # Verify that the index was created successfully
+    version_info_path = os.path.join(index_dir, "versionInfo.json")
+    if not os.path.exists(version_info_path):
+        raise FileNotFoundError(f"Salmon index creation failed: {version_info_path} does not exist")
+    
+    logging.info(f"Salmon index created successfully at {index_dir}")
 
 def master_script_generator(file, w_dir, job_dir, output_dir,
                             threads, memory,
@@ -274,6 +281,13 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         out.write("conda activate salmon\n")
         out.write("\n")
         out.write(f"cd {w_dir}\n")
+        out.write("\n")
+        out.write("# Verify salmon index exists before running quantification\n")
+        out.write(f"if [ ! -f {salmon_index}/versionInfo.json ]; then\n")
+        out.write(f"    echo \"ERROR: Salmon index not found at {salmon_index}/versionInfo.json\"\n")
+        out.write("    exit 1\n")
+        out.write("fi\n")
+        out.write("\n")
         out.write(f"salmon quant -i {salmon_index} ")
         out.write(f"{' '.join(quant_options)}")
         out.write(f" -r {file} -o {os.path.join(output_dir, out_name)} \n")

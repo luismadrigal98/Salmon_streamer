@@ -142,6 +142,25 @@ def main(args):
                     output_name='salmon_index',
                     salmon_options = salmon_index_options)
 
+    # Verify the index was created successfully and wait for file system sync
+    import time
+    salmon_index_path = os.path.join(temporal_directory, 'salmon_index')
+    version_info_path = os.path.join(salmon_index_path, 'versionInfo.json')
+    
+    # Wait up to 30 seconds for the index to be fully written
+    max_wait = 30
+    wait_time = 0
+    while not os.path.exists(version_info_path) and wait_time < max_wait:
+        logging.info(f"Waiting for salmon index to be fully created... ({wait_time}s)")
+        time.sleep(2)
+        wait_time += 2
+    
+    if not os.path.exists(version_info_path):
+        logging.error(f"Salmon index creation failed: {version_info_path} does not exist after {max_wait} seconds")
+        sys.exit(1)
+    
+    logging.info(f"Salmon index verified successfully at {salmon_index_path}")
+
     # Run Salmon quantification
 
     logging.info('Quantifying the files ...')
