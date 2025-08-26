@@ -52,6 +52,11 @@ def main(args):
     chrom_level = args.chrom_level
     memory = args.memory
     clean = args.clean
+    email = args.email
+    partition = args.partition
+    conda_env = args.conda_env
+    time_limit = args.time_limit
+    module_load_cmd = args.module_load_cmd
 
     # Check if the input directory exists
     if not os.path.isdir(input_dir):
@@ -288,7 +293,7 @@ def main(args):
 
             job = master_script_generator(file_path, working_directory, job_dir, output_dir, threads, memory,
                                         os.path.join(temporal_directory, 'salmon_index'),
-                                        quant_options)
+                                        quant_options, email, partition, conda_env, time_limit, module_load_cmd)
             # Run the job
             cmd_launcher = f"sbatch {job}"
             logging.info(f"Submitting job: {cmd_launcher}")

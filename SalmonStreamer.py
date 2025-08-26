@@ -107,6 +107,16 @@ def main():
                         help='Memory to use in the cluster for individual quantification jobs', default=2)
     misc_group.add_argument('--clean', '-cl', action='store_true', 
                         help='Clean the temporal directory after the run', default=False)
+    misc_group.add_argument('--email', required=False, 
+                        help='Email address for SLURM job notifications (optional)', default=None)
+    misc_group.add_argument('--partition', required=False, 
+                        help='SLURM partition to use', default='sixhour,eeb,kucg,kelly')
+    misc_group.add_argument('--conda_env', required=False, 
+                        help='Conda environment name to activate', default='salmon')
+    misc_group.add_argument('--time_limit', required=False, 
+                        help='Time limit for SLURM jobs', default='05:59:00')
+    misc_group.add_argument('--module_load_cmd', required=False, 
+                        help='Module load command for conda (use "none" to skip)', default='module load conda')
     
     # Create the process subcommand parser (from Salmon_output_processor.py)
     process_parser = subparsers.add_parser('ProcessSalmonOut', help='Process Salmon output into a combined table')

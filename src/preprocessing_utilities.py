@@ -223,7 +223,12 @@ def run_salmon_index(transcriptome_genome, decoy_file, threads, output_dir, outp
 def master_script_generator(file, w_dir, job_dir, output_dir,
                             threads, memory,
                             salmon_index, 
-                            quant_options = ['--noLengthCorrection -l A -p 1']):
+                            quant_options = ['--noLengthCorrection -l A -p 1'],
+                            email = None,
+                            partition = 'sixhour,eeb,kucg,kelly',
+                            conda_env = 'salmon',
+                            time_limit = '05:59:00',
+                            module_load_cmd = 'module load conda'):
     """
     Generate a master script to run Salmon quantification on the given FASTQ file.
 
@@ -245,6 +250,16 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         Path to the Salmon index
     quant_options : list, optional
         List of additional options for Salmon quantification (default is ['--noLengthCorrection'])
+    email : str, optional
+        Email address for SLURM job notifications (default: None, no email)
+    partition : str, optional
+        SLURM partition to use (default: 'sixhour,eeb,kucg,kelly')
+    conda_env : str, optional
+        Conda environment name to activate (default: 'salmon')
+    time_limit : str, optional
+        Time limit for SLURM jobs (default: '05:59:00')
+    module_load_cmd : str, optional
+        Module load command for conda (default: 'module load conda', use 'none' to skip)
 
     Returns
     -------
@@ -267,18 +282,20 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         out.write("#!/bin/bash\n")
         out.write(f"#SBATCH --job-name=salmon_{name}\n")
         out.write(f"#SBATCH --output={os.path.join(job_dir, f'salmon_{name}.out')}\n")
-        out.write("#SBATCH --partition=sixhour,eeb,kucg,kelly\n")
+        out.write(f"#SBATCH --partition={partition}\n")
         out.write(f"#SBATCH --ntasks={threads}\n")
         out.write(f"#SBATCH --cpus-per-task=1\n")
-        out.write("#SBATCH --time=05:59:00\n")
-        out.write("#SBATCH --mail-user=l338m483@ku.edu\n")
-        out.write("#SBATCH --mail-type=FAIL\n")
+        out.write(f"#SBATCH --time={time_limit}\n")
+        if email:
+            out.write(f"#SBATCH --mail-user={email}\n")
+            out.write("#SBATCH --mail-type=FAIL\n")
         out.write(f"#SBATCH --mem-per-cpu={memory}g\n")
         out.write("\n")
-        out.write("module load conda\n")
+        if module_load_cmd and module_load_cmd.lower() != 'none':
+            out.write(f"{module_load_cmd}\n")
         out.write(r'eval "$(conda shell.bash hook)"')
         out.write("\n")
-        out.write("conda activate salmon\n")
+        out.write(f"conda activate {conda_env}\n")
         out.write("\n")
         out.write(f"cd {w_dir}\n")
         out.write("\n")
