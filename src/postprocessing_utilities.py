@@ -135,7 +135,19 @@ def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file)
                     plants_in_sequence.append(cols[j])
             else:
                 # Data rows
-                gname = cols[0].split("=")[1]
+                # Check if the expected format is present
+                if "=" not in cols[0]:
+                    print(f"Warning: Line {line_idx + 1} has unexpected format in column 1: '{cols[0]}'")
+                    print(f"Expected format: 'allele_gene=gene_name', but found: '{cols[0]}'")
+                    continue  # Skip this line
+                
+                try:
+                    gname = cols[0].split("=")[1]
+                except IndexError:
+                    print(f"Error: Line {line_idx + 1} - Cannot extract gene name from: '{cols[0]}'")
+                    print(f"Full line: {line.strip()}")
+                    continue  # Skip this line
+                
                 try:
                     nn = includedgenes[gname]
                     fn[0] += 1
@@ -143,6 +155,11 @@ def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file)
                         ux = data[gname]
                     except KeyError:
                         data[gname] = {"IM767": [], cross: []}
+                    
+                    # Check if allele can be extracted
+                    if "_" not in cols[0]:
+                        print(f"Warning: Line {line_idx + 1} - Cannot extract allele from: '{cols[0]}'")
+                        continue  # Skip this line
                     
                     allele = cols[0].split("_")[0]
                     
