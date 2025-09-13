@@ -32,30 +32,94 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', include
     # Change to the output directory
     os.chdir(output_dir)
 
-    if mode == 'cmd': # Currently broken!!!
+    if mode == 'cmd':
+        import glob  # Import glob for file pattern matching
+        print("Running combine_results in command line mode...")
         
-        # Output column 5 (counts, not TPM column 4) as text file with ID as name
-        cmd_cut = "for i in $(ls | grep quant); do cut -f5 $i/quant.sf > $i.txt; done"
-        subprocess.run(cmd_cut, shell=True, executable='/bin/bash')
+        # Clean up any existing temporary files
+        subprocess.run("rm -f *.txt *_count.txt", shell=True, executable='/bin/bash')
+        
+        # Step 1: Extract column 5 (NumReads) from each quant.sf file
+        print("Extracting NumReads column from each quantification file...")
+        cmd_cut = "for i in *quant; do cut -f5 $i/quant.sf > ${i}.txt; done"
+        result = subprocess.run(cmd_cut, shell=True, executable='/bin/bash', capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error in cut command: {result.stderr}")
+            return
 
-        # Replace first row in file with textfile name ie ID
-        cmd_replace = r"for i in $(ls | grep quant.txt); do cat <(echo $i | perl -pe 's/.txt//') <(tail -n +2 $i) > ${i}_count.txt; done"
-        subprocess.run(cmd_replace, shell=True, executable='/bin/bash')
+        # Step 2: Replace first row with sample name (removing _quant suffix)
+        print("Adding sample names as headers...")
+        cmd_replace = "for i in *quant.txt; do sample_name=$(echo $i | sed 's/_quant\\.txt//'); (echo $sample_name; tail -n +2 $i) > ${i}_count.txt; done"
+        result = subprocess.run(cmd_replace, shell=True, executable='/bin/bash', capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error in replace command: {result.stderr}")
+            return
 
-        # Get gene names from one of the results, to be used as first column in compiled results file
-        # Dynamically get gene names from the first quantification result
-        first_quant_dir = subprocess.check_output("ls | grep quant | head -n 1", shell=True, executable='/bin/bash').decode().strip()
-        cmd_cut_gene_names = f"cut -f1 {first_quant_dir}/quant.sf > 1count.txt"
-        subprocess.run(cmd_cut_gene_names, shell=True, executable='/bin/bash')
+        # Step 3: Get gene names from the first quantification result
+        print("Extracting gene names...")
+        first_quant_dir = subprocess.check_output("ls -d *quant | head -n 1", shell=True, executable='/bin/bash').decode().strip()
+        cmd_cut_gene_names = f"cut -f1 {first_quant_dir}/quant.sf > 0_gene_names.txt"
+        result = subprocess.run(cmd_cut_gene_names, shell=True, executable='/bin/bash', capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error extracting gene names: {result.stderr}")
+            return
+        
+        # Step 4: Replace first line of gene names file with "Name"
+        cmd_fix_header = "sed -i '1s/.*/Name/' 0_gene_names.txt"
+        subprocess.run(cmd_fix_header, shell=True, executable='/bin/bash')
 
-        # Put everything together
-        cmd_paste = f"paste *count* > {result_name}"
-        subprocess.run(cmd_paste, shell=True, executable='/bin/bash')
+        # Step 5: Combine everything using paste, ensuring proper order
+        print("Combining all files...")
+        # First, get list of count files in a specific order
+        count_files = sorted(glob.glob("*quant.txt_count.txt"))
+        if not count_files:
+            print("Error: No count files found matching pattern '*quant.txt_count.txt'")
+            # Try alternative pattern
+            count_files = sorted(glob.glob("*_count.txt"))
+            if count_files:
+                print(f"Found {len(count_files)} count files with alternative pattern")
+            else:
+                print("Error: No count files found at all")
+                return
+        
+        # Build the paste command with explicit file list
+        files_list = ["0_gene_names.txt"] + count_files
+        files_str = " ".join(files_list)  # Remove quotes since they're causing issues
+        cmd_paste = f"paste {files_str} > {result_name}"
+        
+        print(f"Running: {cmd_paste}")
+        result = subprocess.run(cmd_paste, shell=True, executable='/bin/bash', capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error in paste command: {result.stderr}")
+            print(f"Available files: {os.listdir('.')}")
+            return
+        
+        # Step 6: Clean up temporary files (but keep the result file)
+        print("Cleaning up temporary files...")
+        subprocess.run("rm -f 0_gene_names.txt *quant.txt *_count.txt", shell=True, executable='/bin/bash')
+        # Note: This preserves the result file by being specific about what to delete
 
         if includes_alternative_genome:
-            # Manually sort the table so that 2 species are on alternative rows, and remove "quant" from header row
-            cmd_sort = r"perl -pe 's/.fastq//g ; s/_quant//g ; s/=/\t/ ; s/aName/aName\taName/' " + result_name + r" | sort -t$'\t' -k2,2 -k1,1 | perl -pe 's/ID\t/ID=/ ; s/\taName//' > clean_" + result_name
-            subprocess.run(cmd_sort, shell=True, executable='/bin/bash')
+            print("Processing alternative genome data...")
+            # Clean and reorganize the table for dual-genome quantification
+            # This sorts transcripts by gene name while keeping full transcript IDs
+            cmd_sort = f"""(head -n 1 "{result_name}"; tail -n +2 "{result_name}" | awk 'BEGIN {{FS=OFS="\t"}} 
+                          {{
+                              # Extract gene name for sorting but keep full transcript ID
+                              split($1, parts, "=")
+                              if (length(parts) == 2) {{
+                                  gene_name = parts[2]
+                                  allele_prefix = parts[1]
+                                  print gene_name "\t" $0
+                              }}
+                          }}' | sort -t$'\t' -k1,1 -k2,2 | cut -f2-) > "clean_{result_name}" """
+            result = subprocess.run(cmd_sort, shell=True, executable='/bin/bash', capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Error in sort command: {result.stderr}")
+            else:
+                print(f"Alternative genome processing complete. Output saved as clean_{result_name}")
+
+        print(f"Command mode processing complete. Results saved to: {result_name}")
 
     elif mode == 'python':
         # List to store DataFrames
@@ -90,6 +154,44 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', include
 
         # Write the combined table to a file
         combined_df.to_csv(result_name, sep='\t', index=False)
+        
+        # Process alternative genome data if requested
+        if includes_alternative_genome:
+            print("Processing alternative genome data in Python mode...")
+            
+            # Extract gene names for sorting while keeping full transcript IDs
+            gene_name_extracted = []
+            allele_info = []
+            
+            for name in combined_df['Name']:
+                if '=' in name:
+                    # Split on "=" to get allele_info=gene_name
+                    parts = name.split('=', 1)
+                    allele_info.append(parts[0])  # e.g., "SF_ID" or "IM767_ID"
+                    gene_name_extracted.append(parts[1])  # e.g., "MgIM767.01G000300.v2.1"
+                else:
+                    # If no "=" found, keep original name
+                    allele_info.append("")
+                    gene_name_extracted.append(name)
+            
+            # Add extracted information to DataFrame for sorting
+            combined_df['AlleleInfo'] = allele_info
+            combined_df['GeneName'] = gene_name_extracted
+            
+            # Sort by gene name first, then by allele info to group transcripts together
+            # This ensures IM767_ID and SF_ID for the same gene appear consecutively
+            combined_df_sorted = combined_df.sort_values(['GeneName', 'AlleleInfo'], ascending=[True, True])
+            
+            # Create clean output - keep the original transcript IDs but sorted
+            clean_df = combined_df_sorted[['Name'] + [col for col in combined_df_sorted.columns 
+                                                     if col not in ['Name', 'AlleleInfo', 'GeneName']]].copy()
+            
+            # Write the cleaned and sorted output
+            clean_result_name = f"clean_{result_name}"
+            clean_df.to_csv(clean_result_name, sep='\t', index=False)
+            print(f"Alternative genome processing complete. Sorted output saved as: {clean_result_name}")
+        
+        print(f"Python mode processing complete. Results saved to: {result_name}")
 
 def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file):
     """

@@ -123,8 +123,8 @@ def main():
     process_parser.add_argument('-o', '--output', required=True, help='Directory with the output of the Salmon pipeline')
     process_parser.add_argument('--result_name', '--rn', default='table.txt', 
                             help='Name of the output file to store the combined results')
-    process_parser.add_argument('--mode', '-m', default='cmd', 
-                            help='Mode to run the commands. Options are "cmd" for command line and "python" for Python code.')
+    process_parser.add_argument('--mode', '-m', default='python', 
+                            help='Mode to run the commands. Options are "cmd" for command line and "python" (default) for Python code.')
     process_parser.add_argument('--includes_alternative_genome', action='store_true', 
                             help='If True, the alternative genome was included in the analysis.')
     
