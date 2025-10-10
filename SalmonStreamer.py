@@ -31,6 +31,7 @@ from subprograms.CalculateCPM import main as calculate_cpm_main
 from subprograms.ProcessGenotypes import main as process_genotypes_main
 from subprograms.MakePhenotypes import main as make_phenotypes_main
 from subprograms.PrepareQTLInputs import main as prepare_qtl_inputs_main
+from subprograms.ParentalDE import main as parental_de_main
 from src.postprocessing_utilities import process_post_pipeline
 
 def main():
@@ -313,6 +314,26 @@ def main():
     qtl_inputs_parser.add_argument('--chromosomes', nargs='+', type=int, default=list(range(1, 15)),
                                   help='List of chromosome numbers (default: 1-14)')
     
+    # --- Add ParentalDE Subcommand ---
+    parental_de_parser = subparsers.add_parser('ParentalDE', 
+                                               help='Test for differential expression between parental lines')
+    parental_de_parser.add_argument('--expression-file', required=True,
+                                   help='Path to expression data file (tab-delimited, genes in rows)')
+    parental_de_parser.add_argument('--parent1-samples', nargs='+', required=True,
+                                   help='Sample IDs or patterns for parent 1 (space-separated)')
+    parental_de_parser.add_argument('--parent2-samples', nargs='+', required=True,
+                                   help='Sample IDs or patterns for parent 2 (space-separated)')
+    parental_de_parser.add_argument('--parent1-name', required=True,
+                                   help='Name for parent 1 (e.g., IM767)')
+    parental_de_parser.add_argument('--parent2-name', required=True,
+                                   help='Name for parent 2 (e.g., SF, SWB)')
+    parental_de_parser.add_argument('--test-method', choices=['ttest', 'mannwhitney'], default='ttest',
+                                   help='Statistical test method (default: ttest)')
+    parental_de_parser.add_argument('--fdr-threshold', type=float, default=0.05,
+                                   help='FDR threshold for significance (default: 0.05)')
+    parental_de_parser.add_argument('--output-dir', default='./DE_results',
+                                   help='Output directory for results (default: ./DE_results)')
+    
     # Parse arguments
     args = parser.parse_args()
     
@@ -347,6 +368,8 @@ def main():
         make_phenotypes_main(args)
     elif args.command == 'PrepareQTLInputs':
         prepare_qtl_inputs_main(args)
+    elif args.command == 'ParentalDE':
+        parental_de_main(args)
     else:
         parser.print_help()
 
