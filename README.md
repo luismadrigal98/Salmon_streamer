@@ -15,42 +15,78 @@ Salmon Streamer is a comprehensive bioinformatics pipeline for RNA-seq data anal
 - **Quality Control**: PCA-based sample filtering and outlier detection
 - **Modular Design**: Run individual steps or complete workflows
 
+### Available Commands
+
+Salmon Streamer provides the following subcommands:
+
+| Command | Description |
+|---------|-------------|
+| `AnnTransfer` | Transfer annotations from reference to alternative genome using Liftoff |
+| `GenerateTranscriptome` | Generate combined transcriptome from liftover results |
+| `RunSalmonQuant` | Run Salmon pipeline for RNA-seq quantification (SE/PE) |
+| `ProcessSalmonOut` | Process Salmon output into a combined table |
+| `TranslateSalmon` | Translate Salmon outputs and organize read counts by allele |
+| `CalculateRawReads` | Calculate raw reads per plant from Salmon outputs |
+| `CalculateCPM` | Calculate CPM (counts per million) for PCA analysis |
+| `ProcessPost` | Run complete post-processing pipeline (combines above three) |
+| `PCA_QC` | Perform PCA-based quality control on expression data |
+| `ParentalDE` | Differential expression analysis between parental lines |
+| `ProcessGenotypes` | Process genotypes from transcript mapping data |
+| `MakePhenotypes` | Generate phenotype files from expression data |
+| `PrepareQTLInputs` | Prepare inputs for QTL analysis in R/qtl format |
+| `RunQTL` | Run QTL analysis with automated job submission |
+| `Voom` | Preprocess Salmon output for voom analysis (placeholder) |
+
 ### Pipeline Components
 
 1. **Genome Preparation**
    - Annotation transfer between genomes (Liftoff)
    - Combined transcriptome generation
+   - Support for dual-genome quantification
 
 2. **RNA-seq Quantification**
    - Salmon index building and quantification
-   - Support for both single-end and paired-end reads
+   - **Single-end and paired-end read support**
+   - Automatic R1/R2 file pairing for PE mode
+   - Gzipped file handling
    - Output processing and combination
 
 3. **Post-processing**
    - Allele-specific read count organization
    - CPM calculation for quality control
+   - Alternative genome sorting for consecutive alleles
 
 4. **Differential Expression Analysis**
    - Parental line comparison with statistical testing
    - Welch's t-test and Mann-Whitney U test options
    - Benjamini-Hochberg FDR correction
+   - Fold change and effect size calculations
 
-5. **Genotype Processing**
+5. **Quality Control**
+   - PCA-based sample filtering
+   - IQR-based outlier detection
+   - Read depth filtering
+
+6. **Genotype Processing**
    - Transcript mapping analysis
    - Genotype calling from RNA-seq data
    - Error rate estimation and quality filtering
+   - Chromosome-specific processing
 
-6. **Phenotype Generation**
+7. **Phenotype Generation**
    - Expression data normalization (Box-Cox transformation)
    - Cross-specific phenotype file creation
+   - Summary statistics per gene
 
-7. **QTL Input Preparation**
+8. **QTL Input Preparation**
    - R/qtl format file generation
    - Phenotype and genotype integration
+   - Genetic map construction
 
-8. **QTL Analysis**
+9. **QTL Analysis**
    - Automated SLURM job submission
    - Permutation testing and significance analysis
+   - LOD score calculation
 
 ## Requirements
 
@@ -575,7 +611,48 @@ This project is licensed under the terms specified in the LICENSE file.
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
+## Recent Updates
+
+### Version 1.1.0 (October 2025)
+
+**New Features:**
+- ✨ **Paired-End Read Support**: Full support for paired-end RNA-seq data
+  - Automatic R1/R2 file pairing with customizable patterns
+  - Support for gzipped paired-end files
+  - Backward compatible with existing single-end workflows
+  
+- ✨ **Differential Expression Analysis**: New `ParentalDE` module for parental line comparisons
+  - Welch's t-test for parametric comparisons
+  - Mann-Whitney U test for non-parametric comparisons
+  - Benjamini-Hochberg FDR correction
+  - Comprehensive statistical output
+
+**Bug Fixes:**
+- Fixed IndexError in `translate_salmon_outputs` function with improved error handling
+- Fixed malformed output in cmd mode for `combine_results` (duplicate headers issue)
+- Improved file format validation in post-processing utilities
+
+**Improvements:**
+- Added alternative genome sorting for consecutive allele grouping in output tables
+- Enhanced error messages and logging throughout the pipeline
+- Improved file processing with better permission checking
+- Refactored code for better maintainability
+
 ## Changelog
+
+### v1.1.0 - October 2025
+- Added paired-end read support with automatic R1/R2 pairing
+- Implemented ParentalDE module for differential expression analysis
+- Fixed post-processing bugs in translation and combination functions
+- Added sorting functionality for alternative genome outputs
+- Enhanced error handling and validation
+
+### v1.0.0 - Initial Release
+- Complete RNA-seq to QTL pipeline
+- Single-end read support
+- Allele-specific expression quantification
+- Genotype calling and processing
+- QTL input preparation
 
 ## Legacy Usage Information
 
