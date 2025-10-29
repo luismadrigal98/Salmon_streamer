@@ -98,6 +98,12 @@ def main():
     salmon_quant_group.add_argument('--quant_options', '-qo', required=False,
                             help='Salmon quant options as a single string',
                             default='--noLengthCorrection -l U -p 1')
+    salmon_quant_group.add_argument('--library-type', choices=['SE', 'PE'], default='SE',
+                            help='Library type: SE (single-end) or PE (paired-end) (default: SE)')
+    salmon_quant_group.add_argument('--r1-pattern', default='_R1',
+                            help='Pattern to identify R1/forward reads in paired-end mode (default: _R1)')
+    salmon_quant_group.add_argument('--r2-pattern', default='_R2',
+                            help='Pattern to identify R2/reverse reads in paired-end mode (default: _R2)')
     
     # Miscellaneous arguments
     misc_group = run_parser.add_argument_group('Miscellaneous arguments', 'Miscellaneous settings')

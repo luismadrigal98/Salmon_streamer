@@ -13,6 +13,61 @@ import os
 import fileinput
 from Bio import SeqIO
 
+def pair_fastq_files(file_list, r1_pattern='_R1', r2_pattern='_R2'):
+    """
+    Pair R1 and R2 fastq files based on naming patterns.
+    
+    Parameters
+    ----------
+    file_list : list
+        List of fastq file paths
+    r1_pattern : str
+        Pattern to identify R1/forward reads (default: '_R1')
+    r2_pattern : str
+        Pattern to identify R2/reverse reads (default: '_R2')
+    
+    Returns
+    -------
+    tuple
+        (paired_files, unpaired_files)
+        paired_files: list of tuples [(r1_path, r2_path), ...]
+        unpaired_files: list of files that couldn't be paired
+    """
+    paired_files = []
+    unpaired_files = []
+    r1_files = {}
+    r2_files = {}
+    
+    # Separate R1 and R2 files
+    for file_path in file_list:
+        filename = os.path.basename(file_path)
+        
+        if r1_pattern in filename:
+            # Extract the base name (everything before the R1 pattern)
+            base_name = filename.split(r1_pattern)[0]
+            r1_files[base_name] = file_path
+        elif r2_pattern in filename:
+            # Extract the base name (everything before the R2 pattern)
+            base_name = filename.split(r2_pattern)[0]
+            r2_files[base_name] = file_path
+        else:
+            # File doesn't match either pattern
+            unpaired_files.append(file_path)
+    
+    # Match R1 and R2 files
+    for base_name in r1_files:
+        if base_name in r2_files:
+            paired_files.append((r1_files[base_name], r2_files[base_name]))
+        else:
+            unpaired_files.append(r1_files[base_name])
+    
+    # Add unmatched R2 files to unpaired
+    for base_name in r2_files:
+        if base_name not in r1_files:
+            unpaired_files.append(r2_files[base_name])
+    
+    return paired_files, unpaired_files
+
 def homogenize_headers(input_file, output_file, only_chrom):
     """
     This function homogenizes the headers of a FASTA file by removing the characters after the first space in the header.
@@ -221,21 +276,23 @@ def run_salmon_index(transcriptome_genome, decoy_file, threads, output_dir, outp
     logging.info(f"Salmon index created successfully at {index_dir}")
 
 def master_script_generator(file, w_dir, job_dir, output_dir,
-                            threads, memory,
+                            threads, memory, 
                             salmon_index, 
                             quant_options = ['--noLengthCorrection -l A -p 1'],
                             email = None,
                             partition = 'sixhour,eeb,kucg,kelly',
                             conda_env = 'salmon',
                             time_limit = '05:59:00',
-                            module_load_cmd = 'module load conda'):
+                            module_load_cmd = 'module load conda',
+                            library_type = 'SE',
+                            r2_file = None):
     """
-    Generate a master script to run Salmon quantification on the given FASTQ file.
+    Generate a master script to run Salmon quantification on FASTQ file(s).
 
     Parameters
     ----------
     file : str
-        Path to the FASTQ file to be quantified
+        Path to the FASTQ file (R1 for paired-end, or single file for single-end)
     w_dir : str
         Path to the working directory
     job_dir : str
@@ -249,7 +306,7 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
     salmon_index : str
         Path to the Salmon index
     quant_options : list, optional
-        List of additional options for Salmon quantification (default is ['--noLengthCorrection'])
+        List of additional options for Salmon quantification (default is ['--noLengthCorrection -l A -p 1'])
     email : str, optional
         Email address for SLURM job notifications (default: None, no email)
     partition : str, optional
@@ -260,6 +317,10 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         Time limit for SLURM jobs (default: '05:59:00')
     module_load_cmd : str, optional
         Module load command for conda (default: 'module load conda', use 'none' to skip)
+    library_type : str, optional
+        Library type: 'SE' for single-end or 'PE' for paired-end (default: 'SE')
+    r2_file : str, optional
+        Path to R2 file for paired-end reads (required if library_type='PE')
 
     Returns
     -------
@@ -307,6 +368,13 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
         out.write("\n")
         out.write(f"salmon quant -i {salmon_index} ")
         out.write(f"{' '.join(quant_options)}")
-        out.write(f" -r {file} -o {os.path.join(output_dir, out_name)} \n")
+        
+        # Handle paired-end or single-end reads
+        if library_type == 'PE':
+            if r2_file is None:
+                raise ValueError("r2_file must be provided for paired-end library type")
+            out.write(f" -1 {file} -2 {r2_file} -o {os.path.join(output_dir, out_name)} \n")
+        else:  # SE mode
+            out.write(f" -r {file} -o {os.path.join(output_dir, out_name)} \n")
 
     return job_script_path

@@ -29,6 +29,106 @@ sys.path.append(os.path.dirname(__file__))
 
 from preprocessing_utilities import *
 
+def process_fastq_file(file_path, logger):
+    """
+    Process a FASTQ file: decompress if gzipped and ensure .fastq extension.
+    
+    Parameters
+    ----------
+    file_path : str
+        Path to the FASTQ file
+    logger : logging.Logger
+        Logger instance for logging messages
+    
+    Returns
+    -------
+    str or None
+        Processed file path, or None if processing failed
+    """
+    original_file_path = file_path
+    output_dir_path = os.path.dirname(file_path)
+    
+    # Decompress if gzipped
+    if file_path.endswith('.gz'):
+        decompressed_path = file_path.replace('.gz', '')
+        
+        # Permission checks
+        if not os.access(file_path, os.R_OK):
+            logger.error(f"Permission denied: Cannot read input file {file_path}")
+            return None
+        if not os.access(output_dir_path, os.W_OK):
+            logger.error(f"Permission denied: Cannot write to directory {output_dir_path}")
+            return None
+        
+        # Decompress
+        cmd_gunzip = f"gunzip -kf {file_path}"
+        logger.info(f"Attempting to decompress: {file_path}")
+        try:
+            result = subprocess.run(
+                cmd_gunzip,
+                shell=True,
+                executable='/bin/bash',
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            if result.returncode == 0:
+                if os.path.exists(decompressed_path):
+                    logger.info(f"Successfully decompressed {file_path} to {decompressed_path}")
+                    file_path = decompressed_path
+                else:
+                    logger.error(f"gunzip succeeded but output file {decompressed_path} not found")
+                    return None
+            else:
+                logger.error(f"Failed to decompress {file_path}. Return code: {result.returncode}")
+                if result.stderr:
+                    logger.error(f"Stderr: {result.stderr.strip()}")
+                return None
+        except Exception as e:
+            logger.error(f"Unexpected error during gunzip for {file_path}: {e}")
+            return None
+    
+    # Ensure .fastq extension
+    if file_path.endswith('.fq'):
+        new_file_path = file_path.replace('.fq', '.fastq')
+        if not os.path.exists(file_path):
+            logger.error(f"File not found before renaming: {file_path}")
+            return None
+        if not os.access(os.path.dirname(file_path), os.W_OK):
+            logger.error(f"Permission denied: Cannot rename file in directory {os.path.dirname(file_path)}")
+            return None
+        try:
+            logger.info(f"Renaming {file_path} to {new_file_path}")
+            os.rename(file_path, new_file_path)
+            file_path = new_file_path
+        except OSError as e:
+            logger.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
+            return None
+    
+    elif not file_path.endswith('.fastq'):
+        new_file_path = file_path + '.fastq'
+        if not os.path.exists(file_path):
+            logger.error(f"File not found before renaming: {file_path}")
+            return None
+        if not os.access(os.path.dirname(file_path), os.W_OK):
+            logger.error(f"Permission denied: Cannot rename file in directory {os.path.dirname(file_path)}")
+            return None
+        try:
+            logger.info(f"Renaming {file_path} to {new_file_path}")
+            os.rename(file_path, new_file_path)
+            file_path = new_file_path
+        except OSError as e:
+            logger.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
+            return None
+    
+    # Final check
+    if not os.path.exists(file_path):
+        logger.error(f"Final file path {file_path} does not exist")
+        return None
+    
+    return file_path
+
 def main(args):
     # Setting up basic logging configuration
     logging.basicConfig(level=logging.INFO)
@@ -57,6 +157,9 @@ def main(args):
     conda_env = args.conda_env
     time_limit = args.time_limit
     module_load_cmd = args.module_load_cmd
+    library_type = args.library_type
+    r1_pattern = args.r1_pattern
+    r2_pattern = args.r2_pattern
 
     # Check if the input directory exists
     if not os.path.isdir(input_dir):
@@ -177,128 +280,64 @@ def main(args):
     if not os.path.isdir(job_dir):
         os.mkdir(job_dir)
 
-    for file in tqdm(files, desc='Quantifying files', bar_format=tqdm_format):
-        original_file_path = os.path.join(input_dir, file) # Store original path for logging
-        file_path = original_file_path # Start with the original path
-        decompressed_successfully = True # Flag to track decompression status
-        output_dir_path = os.path.dirname(file_path) # Directory where output file will be written
-
-        if file_path.endswith('.gz'):
-            decompressed_path = file_path.replace('.gz', '')
-
-            # --- Permission Check ---
-            can_read_gz = os.access(file_path, os.R_OK)
-            can_write_here = os.access(output_dir_path, os.W_OK)
-
-            if not can_read_gz:
-                logging.error(f"Permission denied: Cannot read input file {file_path}. Skipping.")
-                decompressed_successfully = False
+    # Handle paired-end vs single-end mode
+    if library_type == 'PE':
+        logging.info('Processing paired-end reads...')
+        
+        # Pair the fastq files
+        paired_files = pair_fastq_files(input_dir, r1_pattern=r1_pattern, r2_pattern=r2_pattern)
+        
+        if not paired_files:
+            logging.error('No paired files found! Check your R1/R2 patterns.')
+            sys.exit(1)
+        
+        logging.info(f'Found {len(paired_files)} paired-end samples')
+        
+        for base_name, (r1_file, r2_file) in tqdm(paired_files.items(), desc='Quantifying paired files', bar_format=tqdm_format):
+            r1_path = os.path.join(input_dir, r1_file)
+            r2_path = os.path.join(input_dir, r2_file)
+            
+            # Process R1 file (decompression and extension handling)
+            r1_path = process_fastq_file(r1_path, logging)
+            if r1_path is None:
+                logging.warning(f"Skipping pair {base_name} due to R1 processing error")
                 continue
-            if not can_write_here:
-                logging.error(f"Permission denied: Cannot write to directory {output_dir_path} for decompression. Skipping {file_path}.")
-                decompressed_successfully = False
+                
+            # Process R2 file (decompression and extension handling)
+            r2_path = process_fastq_file(r2_path, logging)
+            if r2_path is None:
+                logging.warning(f"Skipping pair {base_name} due to R2 processing error")
                 continue
-            # --- End Permission Check ---
-
-            # Use gunzip -k to keep the original file, which is safer
-            # Use Python 3.6 compatible arguments for subprocess.run
-            cmd_gunzip = f"gunzip -kf {file_path}" # -k: keep, -f: force overwrite (if .fq exists)
-            logging.info(f"Attempting to decompress: {file_path}")
-            try:
-                result = subprocess.run(
-                    cmd_gunzip,
-                    shell=True,
-                    executable='/bin/bash',
-                    stdout=subprocess.PIPE, # Python 3.6 equivalent of capture_output=True
-                    stderr=subprocess.PIPE, # Python 3.6 equivalent of capture_output=True
-                    universal_newlines=True # Python 3.6 equivalent of text=True
-                )
-
-                if result.returncode == 0:
-                    # Check if the decompressed file actually exists now
-                    if os.path.exists(decompressed_path):
-                        logging.info(f"Successfully decompressed {file_path} to {decompressed_path}")
-                        file_path = decompressed_path # Update file_path ONLY on success
-                    else:
-                        # This might happen if gunzip -f overwrites but then fails, or other edge cases
-                        logging.error(f"gunzip command succeeded but output file {decompressed_path} not found. Skipping {original_file_path}.")
-                        decompressed_successfully = False
-                        continue
-                else:
-                    logging.error(f"Failed to decompress {file_path}. Return code: {result.returncode}")
-                    if result.stderr:
-                        logging.error(f"Stderr: {result.stderr.strip()}")
-                    if result.stdout: # Log stdout too, might contain info
-                        logging.error(f"Stdout: {result.stdout.strip()}")
-                    logging.warning(f"Skipping file {original_file_path} due to decompression error.")
-                    decompressed_successfully = False
-                    continue # Skip to the next file in the loop
-            except Exception as e:
-                 logging.error(f"An unexpected error occurred during gunzip subprocess for {file_path}: {e}")
-                 decompressed_successfully = False
-                 continue
-
-
-        # Proceed only if decompression was successful (or not needed)
-        if decompressed_successfully:
-            # Checking that the file includes the fastq extension
-            # If not, rename the file on the fly to include the .fastq extension and modify the file_path
-
-            # There could be instances where the file extension is fq. Given that upstream fastq is expected,
-            # we will rename the file to fastq
-
-            if file_path.endswith('.fq'):
-                # Check if the target file exists before attempting rename
-                if not os.path.exists(file_path):
-                    logging.error(f"File not found before renaming: {file_path}. This might be due to a prior error. Skipping.")
-                    continue
-                new_file_path = file_path.replace('.fq', '.fastq')
-                try:
-                    # Check write permissions in the directory before renaming
-                    if not os.access(os.path.dirname(file_path), os.W_OK):
-                         logging.error(f"Permission denied: Cannot rename file in directory {os.path.dirname(file_path)}. Skipping {original_file_path}.")
-                         continue
-                    logging.info(f"Renaming {file_path} to {new_file_path}")
-                    os.rename(file_path, new_file_path)
-                    file_path = new_file_path # Update file_path after successful rename
-                except OSError as e:
-                    logging.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
-                    logging.warning(f"Skipping file {original_file_path} due to renaming error.")
-                    continue
-
-            if not file_path.endswith('.fastq'):
-                # Check if the target file exists before attempting rename
-                if not os.path.exists(file_path):
-                    logging.error(f"File not found before renaming: {file_path}. This might be due to a prior error. Skipping.")
-                    continue # Skip to the next file
-
-                new_file_path = file_path + '.fastq'
-                try:
-                    # Check write permissions in the directory before renaming
-                    if not os.access(os.path.dirname(file_path), os.W_OK):
-                         logging.error(f"Permission denied: Cannot rename file in directory {os.path.dirname(file_path)}. Skipping {original_file_path}.")
-                         continue
-                    logging.info(f"Renaming {file_path} to {new_file_path}")
-                    os.rename(file_path, new_file_path)
-                    file_path = new_file_path # Update file_path after successful rename
-                except OSError as e:
-                    logging.error(f"Failed to rename {file_path} to {new_file_path}: {e}")
-                    logging.warning(f"Skipping file {original_file_path} due to renaming error.")
-                    continue # Skip to the next file
-
-            # Ensure the final file_path exists before generating the script
-            if not os.path.exists(file_path):
-                logging.error(f"Final file path {file_path} does not exist before generating job script. Skipping.")
+            
+            # Generate and submit job for paired files
+            job = master_script_generator(r1_path, working_directory, job_dir, output_dir, threads, memory,
+                                        os.path.join(temporal_directory, 'salmon_index'),
+                                        quant_options, email, partition, conda_env, time_limit, module_load_cmd,
+                                        library_type='PE', r2_file=r2_path)
+            
+            cmd_launcher = f"sbatch {job}"
+            logging.info(f"Submitting paired-end job: {cmd_launcher}")
+            subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
+    
+    else:  # Single-end mode (original logic)
+        logging.info('Processing single-end reads...')
+        
+        for file in tqdm(files, desc='Quantifying files', bar_format=tqdm_format):
+            original_file_path = os.path.join(input_dir, file)
+            file_path = process_fastq_file(original_file_path, logging)
+            
+            if file_path is None:
+                logging.warning(f"Skipping file {original_file_path} due to processing error")
                 continue
-
+            
+            # Generate and submit job
             job = master_script_generator(file_path, working_directory, job_dir, output_dir, threads, memory,
                                         os.path.join(temporal_directory, 'salmon_index'),
                                         quant_options, email, partition, conda_env, time_limit, module_load_cmd)
-            # Run the job
+            
             cmd_launcher = f"sbatch {job}"
             logging.info(f"Submitting job: {cmd_launcher}")
             subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
-        # else: Decompression failed, already logged and skipped
 
     # Cleaning all the files and temporal directories
     if clean:
