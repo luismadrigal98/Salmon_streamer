@@ -7,7 +7,9 @@ Salmon Streamer is a comprehensive bioinformatics pipeline for RNA-seq data anal
 ### Key Features
 
 - **Complete RNA-seq Pipeline**: From raw reads to quantified expression
+- **Paired-End Read Support**: Full support for both single-end and paired-end sequencing data
 - **Allele-Specific Expression**: Handle dual-genome quantification for allele-specific mapping
+- **Differential Expression Analysis**: Compare parental line expression with statistical testing
 - **Genotype Calling**: Process transcript mapping data to call genotypes
 - **QTL Preparation**: Generate all inputs needed for QTL analysis
 - **Quality Control**: PCA-based sample filtering and outlier detection
@@ -21,26 +23,32 @@ Salmon Streamer is a comprehensive bioinformatics pipeline for RNA-seq data anal
 
 2. **RNA-seq Quantification**
    - Salmon index building and quantification
+   - Support for both single-end and paired-end reads
    - Output processing and combination
 
 3. **Post-processing**
    - Allele-specific read count organization
    - CPM calculation for quality control
 
-4. **Genotype Processing**
+4. **Differential Expression Analysis**
+   - Parental line comparison with statistical testing
+   - Welch's t-test and Mann-Whitney U test options
+   - Benjamini-Hochberg FDR correction
+
+5. **Genotype Processing**
    - Transcript mapping analysis
    - Genotype calling from RNA-seq data
    - Error rate estimation and quality filtering
 
-5. **Phenotype Generation**
+6. **Phenotype Generation**
    - Expression data normalization (Box-Cox transformation)
    - Cross-specific phenotype file creation
 
-6. **QTL Input Preparation**
+7. **QTL Input Preparation**
    - R/qtl format file generation
    - Phenotype and genotype integration
 
-7. **QTL Analysis**
+8. **QTL Analysis**
    - Automated SLURM job submission
    - Permutation testing and significance analysis
 
@@ -120,6 +128,7 @@ python SalmonStreamer.py GenerateTranscriptome \
 
 ### 2. Run RNA-seq Quantification
 
+**Single-End Mode (default):**
 ```bash
 python SalmonStreamer.py RunSalmonQuant \
     --input ./fastq_files \
@@ -128,6 +137,22 @@ python SalmonStreamer.py RunSalmonQuant \
     --alternative alternative_genome.fa \
     --working_directory ./salmon_work \
     --output ./salmon_output \
+    --library-type SE \
+    --threads 8
+```
+
+**Paired-End Mode:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome combined_transcriptome.fasta \
+    --reference reference_genome.fa \
+    --alternative alternative_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --library-type PE \
+    --r1-pattern _R1 \
+    --r2-pattern _R2 \
     --threads 8
 ```
 
@@ -162,7 +187,25 @@ python SalmonStreamer.py PCA_QC \
     --iqr-multiplier 1.5
 ```
 
-### 6. Process Genotypes
+### 6. Differential Expression Analysis (Parental Lines)
+
+Compare expression between parental lines to identify differentially expressed genes:
+
+```bash
+python SalmonStreamer.py ParentalDE \
+    --expression-file combined_expression.txt \
+    --parental1-pattern IM767 \
+    --parental2-pattern SWB \
+    --output differential_expression_results.txt \
+    --test-type ttest \
+    --alpha 0.05
+```
+
+Available statistical tests:
+- `ttest`: Welch's t-test (default, assumes unequal variances)
+- `mannwhitney`: Mann-Whitney U test (non-parametric alternative)
+
+### 7. Process Genotypes
 
 ```bash
 python SalmonStreamer.py ProcessGenotypes \
@@ -175,7 +218,7 @@ python SalmonStreamer.py ProcessGenotypes \
     --output-dir ./genotype_output
 ```
 
-### 7. Generate Phenotype Files
+### 8. Generate Phenotype Files
 
 ```bash
 python SalmonStreamer.py MakePhenotypes \
@@ -241,14 +284,43 @@ Key parameters:
 #### RNA-seq Quantification
 Run Salmon quantification on RNA-seq reads against the combined transcriptome.
 
+**Single-End Mode:**
 ```bash
-python SalmonStreamer.py RunSalmonQuant --help
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome combined_transcriptome.fasta \
+    --reference reference_genome.fa \
+    --library-type SE \
+    --threads 8 \
+    [other options...]
+```
+
+**Paired-End Mode:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome combined_transcriptome.fasta \
+    --reference reference_genome.fa \
+    --library-type PE \
+    --r1-pattern _R1 \
+    --r2-pattern _R2 \
+    --threads 8 \
+    [other options...]
 ```
 
 Key parameters:
+- `--library-type`: Library type - 'SE' for single-end (default) or 'PE' for paired-end
+- `--r1-pattern`: Pattern to identify R1 files in paired-end mode (default: '_R1')
+- `--r2-pattern`: Pattern to identify R2 files in paired-end mode (default: '_R2')
 - `--threads`: Number of parallel threads
 - `--memory`: Memory per job (for cluster execution)
 - `--quant_options`: Salmon quantification options
+
+Supported R1/R2 patterns:
+- `_R1` / `_R2` (default): sample_R1.fastq, sample_R2.fastq
+- `_1` / `_2`: sample_1.fastq, sample_2.fastq
+- `.R1` / `.R2`: sample.R1.fastq, sample.R2.fastq
+- Custom patterns can be specified
 
 #### Post-processing Components
 
@@ -273,6 +345,37 @@ python SalmonStreamer.py CalculateCPM \
     --salmon-files output1.txt output2.txt \
     --cpm-min 5.0
 ```
+
+#### Differential Expression Analysis
+
+Compare expression levels between two parental lines to identify differentially expressed genes:
+
+```bash
+python SalmonStreamer.py ParentalDE \
+    --expression-file combined_expression.txt \
+    --parental1-pattern IM767 \
+    --parental2-pattern SWB \
+    --output differential_expression_results.txt \
+    --test-type ttest \
+    --alpha 0.05 \
+    --min-samples 3
+```
+
+Key parameters:
+- `--expression-file`: Tab-delimited expression matrix (genes as rows, samples as columns)
+- `--parental1-pattern`: Pattern to identify samples from first parental line
+- `--parental2-pattern`: Pattern to identify samples from second parental line
+- `--test-type`: Statistical test to use ('ttest' or 'mannwhitney')
+  - `ttest`: Welch's t-test (default, assumes unequal variances)
+  - `mannwhitney`: Mann-Whitney U test (non-parametric, for non-normal distributions)
+- `--alpha`: Significance level for FDR correction (default: 0.05)
+- `--min-samples`: Minimum number of samples required in each group (default: 3)
+
+Output includes:
+- Gene-level statistics (mean, std, fold change)
+- Test statistics (t-statistic/U-statistic, p-value)
+- FDR-corrected q-values (Benjamini-Hochberg method)
+- Significance flags
 
 #### Genotype Processing Pipeline
 
