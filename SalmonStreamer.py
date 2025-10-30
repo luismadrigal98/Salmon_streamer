@@ -23,6 +23,7 @@ from subprograms.Salmon_output_processor import main as process_salmon_out_main
 from subprograms.voom_from_salmon import main as voom_main
 from subprograms.AnnTransfer import main as ann_transfer_main
 from subprograms.GenerateTranscriptome import main as generate_transcriptome
+from subprograms.ExtractTranscriptome import main as extract_transcriptome
 from subprograms.RunPCA import main as run_pca_qc_main
 from subprograms.QTL_runner import main as qtl_runner_main
 from subprograms.TranslateSalmon import main as translate_salmon_main
@@ -68,6 +69,17 @@ def main():
     trans_gen_parser.add_argument('--seqid-threshold', type=float, default=0.9, help="Minimum sequence ID threshold for liftover filtering (default: 0.9)")
     trans_gen_parser.add_argument('--output-fasta', default='combined_transcriptome.fasta', help="Name for the final output FASTA file (default: combined_transcriptome.fasta)")
     trans_gen_parser.add_argument('--keep-intermediate', action='store_true', help="Keep intermediate files (default: False)")
+
+    # --- Single-Genome Transcriptome Extraction Subcommand ---
+    extract_trans_parser = subparsers.add_parser('ExtractTranscriptome', help='Extract transcriptome from single reference genome using GFF3 annotations')
+    extract_trans_parser.add_argument('--genome-fasta', '--genome', required=True, help='Reference genome FASTA file')
+    extract_trans_parser.add_argument('--gff-file', '--gff', required=True, help='GFF3 annotation file')
+    extract_trans_parser.add_argument('--output-fasta', '--output', required=True, help='Output transcriptome FASTA file')
+    extract_trans_parser.add_argument('--transcript-types', default='mRNA', help='Comma-separated list of GFF3 feature types to treat as transcripts (default: mRNA)')
+    extract_trans_parser.add_argument('--gene-types', default='gene', help='Comma-separated list of GFF3 feature types to treat as genes (default: gene)')
+    extract_trans_parser.add_argument('--id-prefix', default=None, help='Prefix to add to transcript IDs in output FASTA headers')
+    extract_trans_parser.add_argument('--include-gene-id', action='store_true', help='Include gene ID in FASTA headers')
+    extract_trans_parser.add_argument('--min-length', type=int, default=1, help='Minimum transcript length to include (default: 1)')
 
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
@@ -349,6 +361,9 @@ def main():
     elif args.command == 'GenerateTranscriptome':
         # Call the function to generate the transcriptome
         generate_transcriptome(args)
+    elif args.command == 'ExtractTranscriptome':
+        # Call the function to extract transcriptome from single genome
+        extract_transcriptome(args)
     elif args.command == 'RunSalmonQuant':
         run_salmon_main(args)
     elif args.command == 'ProcessSalmonOut':
