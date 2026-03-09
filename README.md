@@ -22,7 +22,8 @@ Salmon Streamer provides the following subcommands:
 | Command | Description |
 |---------|-------------|
 | `AnnTransfer` | Transfer annotations from reference to alternative genome using Liftoff |
-| `GenerateTranscriptome` | Generate combined transcriptome from liftover results |
+| `GenerateTranscriptome` | Generate combined transcriptome from liftover results (dual-genome) |
+| `ExtractTranscriptome` | Extract transcriptome from a single reference genome using GFF3 annotations |
 | `RunSalmonQuant` | Run Salmon pipeline for RNA-seq quantification (SE/PE) |
 | `ProcessSalmonOut` | Process Salmon output into a combined table |
 | `TranslateSalmon` | Translate Salmon outputs and organize read counts by allele |
@@ -41,8 +42,9 @@ Salmon Streamer provides the following subcommands:
 
 1. **Genome Preparation**
    - Annotation transfer between genomes (Liftoff)
-   - Combined transcriptome generation
-   - Support for dual-genome quantification
+   - Combined transcriptome generation (dual-genome)
+   - Single-genome transcriptome extraction
+   - Support for both single-genome and dual-genome quantification
 
 2. **RNA-seq Quantification**
    - Salmon index building and quantification
@@ -137,6 +139,93 @@ Salmon Streamer provides the following subcommands:
     ```
 
 ## Quick Start
+
+> **Two workflows are available depending on your data:**
+> - **Single-genome workflow** (one reference genome): Start at [Option A](#option-a-single-genome-workflow).
+> - **Dual-genome workflow** (reference + alternative genome, for allele-specific expression): Start at [Option B](#option-b-dual-genome-workflow).
+
+---
+
+### Option A: Single-Genome Workflow
+
+Use this when you only have **one reference genome** and want to quantify read counts (e.g., standard RNA-seq differential expression, no allele-specific analysis needed).
+
+#### A1. Extract Transcriptome from Single Genome
+
+Extract transcript sequences directly from your reference genome and its GFF3 annotation:
+
+```bash
+python SalmonStreamer.py ExtractTranscriptome \
+    --genome-fasta reference_genome.fa \
+    --gff-file reference_annotation.gff3 \
+    --output-fasta transcriptome.fasta
+```
+
+To include gene IDs in FASTA headers (recommended for downstream tools):
+```bash
+python SalmonStreamer.py ExtractTranscriptome \
+    --genome-fasta reference_genome.fa \
+    --gff-file reference_annotation.gff3 \
+    --output-fasta transcriptome.fasta \
+    --include-gene-id
+```
+
+#### A2. Run RNA-seq Quantification (Single Genome)
+
+**Single-End reads:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome transcriptome.fasta \
+    --reference reference_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --library-type SE \
+    --threads 8
+```
+
+**Paired-End reads:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome transcriptome.fasta \
+    --reference reference_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --library-type PE \
+    --r1-pattern _R1 \
+    --r2-pattern _R2 \
+    --threads 8
+```
+
+> **Note:** No `--alternative` argument is needed for single-genome quantification.
+
+#### A3. Process Salmon Output
+
+Combine per-sample Salmon outputs into a single read-count table:
+```bash
+python SalmonStreamer.py ProcessSalmonOut \
+    --output ./salmon_output \
+    --result_name combined_counts.txt \
+    --mode python
+```
+
+#### A4. Quality Control with PCA (Optional)
+
+```bash
+python SalmonStreamer.py PCA_QC \
+    --input-data combined_counts.txt \
+    --label-rules-file examples/label_rules.json \
+    --output-filtered-data-name filtered_counts.tsv \
+    --output-dir ./qc_output \
+    --iqr-multiplier 1.5
+```
+
+---
+
+### Option B: Dual-Genome Workflow
+
+Use this when you have **two genomes** (reference + alternative) and want allele-specific expression analysis (e.g., hybrid crosses).
 
 ### 1. Prepare Genomes and Transcriptome
 
@@ -266,7 +355,7 @@ python SalmonStreamer.py MakePhenotypes \
     --output-dir ./phenotype_files
 ```
 
-### 8. Prepare QTL Inputs
+### 9. Prepare QTL Inputs
 
 ```bash
 python SalmonStreamer.py PrepareQTLInputs \
@@ -278,7 +367,7 @@ python SalmonStreamer.py PrepareQTLInputs \
     --output-dir ./qtl_inputs
 ```
 
-### 9. Run QTL Analysis
+### 10. Run QTL Analysis
 
 ```bash
 python SalmonStreamer.py RunQTL \
@@ -306,7 +395,7 @@ Key parameters:
 - `--annotation_gff3`: Reference annotation GFF3
 - `--output`: Output annotation file
 
-#### Transcriptome Generation
+#### Transcriptome Generation (Dual-Genome)
 Create a combined transcriptome containing genes from both reference and alternative genomes.
 
 ```bash
@@ -317,35 +406,98 @@ Key parameters:
 - `--cov-threshold`: Minimum liftover coverage (default: 0.9)
 - `--seqid-threshold`: Minimum sequence identity (default: 0.9)
 
-#### RNA-seq Quantification
-Run Salmon quantification on RNA-seq reads against the combined transcriptome.
+#### Single-Genome Transcriptome Extraction
 
-**Single-End Mode:**
+Extract transcript sequences directly from a single reference genome and its GFF3 annotation file. Use this when you only have one genome and want standard read-count quantification.
+
 ```bash
-python SalmonStreamer.py RunSalmonQuant \
-    --input ./fastq_files \
-    --transcriptome combined_transcriptome.fasta \
-    --reference reference_genome.fa \
-    --library-type SE \
-    --threads 8 \
-    [other options...]
+python SalmonStreamer.py ExtractTranscriptome \
+    --genome-fasta reference_genome.fa \
+    --gff-file reference_annotation.gff3 \
+    --output-fasta transcriptome.fasta
 ```
 
-**Paired-End Mode:**
+Key parameters:
+- `--genome-fasta` / `--genome`: Reference genome FASTA file (required)
+- `--gff-file` / `--gff`: GFF3 annotation file (required)
+- `--output-fasta` / `--output`: Output transcriptome FASTA file (required)
+- `--transcript-types`: Comma-separated GFF3 feature types to treat as transcripts (default: `mRNA`)
+- `--gene-types`: Comma-separated GFF3 feature types to treat as genes (default: `gene`)
+- `--id-prefix`: Prefix to add to transcript IDs in output FASTA headers (optional)
+- `--include-gene-id`: Include the parent gene ID in FASTA headers (flag, recommended for downstream tools)
+- `--min-length`: Minimum transcript length to include in bp (default: 1)
+
+Example with all optional parameters:
+```bash
+python SalmonStreamer.py ExtractTranscriptome \
+    --genome-fasta reference_genome.fa \
+    --gff-file reference_annotation.gff3 \
+    --output-fasta transcriptome.fasta \
+    --transcript-types mRNA,transcript \
+    --include-gene-id \
+    --min-length 100
+```
+
+#### RNA-seq Quantification
+Run Salmon quantification on RNA-seq reads. Works with both single-genome and dual-genome transcriptomes. For single-genome workflows, omit the `--alternative` argument.
+
+**Single-Genome, Single-End reads:**
 ```bash
 python SalmonStreamer.py RunSalmonQuant \
     --input ./fastq_files \
-    --transcriptome combined_transcriptome.fasta \
+    --transcriptome transcriptome.fasta \
     --reference reference_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --library-type SE \
+    --threads 8
+```
+
+**Single-Genome, Paired-End reads:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome transcriptome.fasta \
+    --reference reference_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
     --library-type PE \
     --r1-pattern _R1 \
     --r2-pattern _R2 \
-    --threads 8 \
-    [other options...]
+    --threads 8
+```
+
+**Dual-Genome, Single-End Mode:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome combined_transcriptome.fasta \
+    --reference reference_genome.fa \
+    --alternative alternative_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --library-type SE \
+    --threads 8
+```
+
+**Dual-Genome, Paired-End Mode:**
+```bash
+python SalmonStreamer.py RunSalmonQuant \
+    --input ./fastq_files \
+    --transcriptome combined_transcriptome.fasta \
+    --reference reference_genome.fa \
+    --alternative alternative_genome.fa \
+    --working_directory ./salmon_work \
+    --output ./salmon_output \
+    --library-type PE \
+    --r1-pattern _R1 \
+    --r2-pattern _R2 \
+    --threads 8
 ```
 
 Key parameters:
 - `--library-type`: Library type - 'SE' for single-end (default) or 'PE' for paired-end
+- `--alternative`: Alternative genome FASTA (omit for single-genome workflows)
 - `--r1-pattern`: Pattern to identify R1 files in paired-end mode (default: '_R1')
 - `--r2-pattern`: Pattern to identify R2 files in paired-end mode (default: '_R2')
 - `--threads`: Number of parallel threads
@@ -621,6 +773,12 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
   - Support for gzipped paired-end files
   - Backward compatible with existing single-end workflows
   
+- ✨ **Single-Genome Transcriptome Extraction**: New `ExtractTranscriptome` module
+  - Extract transcriptomes directly from a single reference genome and GFF3 annotation
+  - Enables standard RNA-seq read-count quantification without a second genome
+  - Handles strand-specific extraction with reverse complement for minus-strand genes
+  - Supports flexible feature type selection (mRNA, transcript, etc.)
+
 - ✨ **Differential Expression Analysis**: New `ParentalDE` module for parental line comparisons
   - Welch's t-test for parametric comparisons
   - Mann-Whitney U test for non-parametric comparisons
@@ -641,6 +799,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 ## Changelog
 
 ### v1.1.0 - October 2025
+- Added single-genome transcriptome extraction via `ExtractTranscriptome` module
 - Added paired-end read support with automatic R1/R2 pairing
 - Implemented ParentalDE module for differential expression analysis
 - Fixed post-processing bugs in translation and combination functions
