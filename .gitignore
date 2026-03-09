@@ -4,3 +4,6 @@ Salmon_streamer.Rproj
 .Rhistory
 Token
 remotes/remotes.sh
+__pycache__/
+*.pyc
+*.pyo
