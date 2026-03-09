@@ -10,7 +10,7 @@ Salmon Streamer is a comprehensive bioinformatics pipeline for RNA-seq data anal
 - **Paired-End Read Support**: Full support for both single-end and paired-end sequencing data
 - **Allele-Specific Expression**: Handle dual-genome quantification for allele-specific mapping
 - **Differential Expression Analysis**: Compare parental line expression with statistical testing
-- **Genotype Calling**: Process transcript mapping data to call genotypes
+- **Genotype Calling**: Process transHouscript mapping data to call genotypes
 - **QTL Preparation**: Generate all inputs needed for QTL analysis
 - **Quality Control**: PCA-based sample filtering and outlier detection
 - **Modular Design**: Run individual steps or complete workflows
