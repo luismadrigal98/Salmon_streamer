@@ -319,11 +319,13 @@ Compare expression between parental lines to identify differentially expressed g
 ```bash
 python SalmonStreamer.py ParentalDE \
     --expression-file combined_expression.txt \
-    --parental1-pattern IM767 \
-    --parental2-pattern SWB \
-    --output differential_expression_results.txt \
-    --test-type ttest \
-    --alpha 0.05
+    --parent1-samples IM767 \
+    --parent2-samples SWB \
+    --parent1-name IM767 \
+    --parent2-name SWB \
+    --output-dir ./DE_results \
+    --test-method ttest \
+    --fdr-threshold 0.05
 ```
 
 Available statistical tests:
@@ -541,23 +543,26 @@ Compare expression levels between two parental lines to identify differentially 
 ```bash
 python SalmonStreamer.py ParentalDE \
     --expression-file combined_expression.txt \
-    --parental1-pattern IM767 \
-    --parental2-pattern SWB \
-    --output differential_expression_results.txt \
-    --test-type ttest \
-    --alpha 0.05 \
-    --min-samples 3
+    --parent1-samples IM767 \
+    --parent2-samples SWB \
+    --parent1-name IM767 \
+    --parent2-name SWB \
+    --output-dir ./DE_results \
+    --test-method ttest \
+    --fdr-threshold 0.05
 ```
 
 Key parameters:
 - `--expression-file`: Tab-delimited expression matrix (genes as rows, samples as columns)
-- `--parental1-pattern`: Pattern to identify samples from first parental line
-- `--parental2-pattern`: Pattern to identify samples from second parental line
-- `--test-type`: Statistical test to use ('ttest' or 'mannwhitney')
+- `--parent1-samples`: Sample IDs or patterns for parent 1 (space-separated)
+- `--parent2-samples`: Sample IDs or patterns for parent 2 (space-separated)
+- `--parent1-name`: Name for parent 1 (e.g., IM767)
+- `--parent2-name`: Name for parent 2 (e.g., SWB)
+- `--test-method`: Statistical test to use ('ttest' or 'mannwhitney')
   - `ttest`: Welch's t-test (default, assumes unequal variances)
   - `mannwhitney`: Mann-Whitney U test (non-parametric, for non-normal distributions)
-- `--alpha`: Significance level for FDR correction (default: 0.05)
-- `--min-samples`: Minimum number of samples required in each group (default: 3)
+- `--fdr-threshold`: Significance level for FDR correction (default: 0.05)
+- `--output-dir`: Output directory for results (default: ./DE_results)
 
 Output includes:
 - Gene-level statistics (mean, std, fold change)
@@ -798,6 +803,12 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Changelog
 
+### v1.1.1 - March 2026
+- **Fixed** `--chrom_level` / `-c` flag now defaults to off (keep all sequences). Previously defaulted to `True`, which silently discarded all scaffold/contig-named sequences and caused an empty decoy file error for assemblies using scaffold-based naming.
+- **Fixed** paired-end mode: `pair_fastq_files` was called with a directory path instead of a file list, causing no pairs to be found.
+- **Fixed** paired-end mode: corrected iteration over `pair_fastq_files` return value (list of tuples, not a dict).
+- Added validation after genome homogenization: clear error message if the homogenized file is empty.
+
 ### v1.1.0 - October 2025
 - Added single-genome transcriptome extraction via `ExtractTranscriptome` module
 - Added paired-end read support with automatic R1/R2 pairing
@@ -838,7 +849,7 @@ python salmon_runner.py -i <input_directory> --transcriptome <transcriptome.fast
 - `--salmon_index_options, -sio`: Salmon index options as a single string (optional, default: --keepDuplicates -k 31)
 - `--quant_options, -qo`: Salmon quant options as a single string (optional, default: --noLengthCorrection -l U -p 1)
 - `--threads, -t`: Number of threads to use (optional, default: 1)
-- `--chrom_level, -c`: Whether to remove scaffolds and contigs from the genomes (optional, default: True)
+- `--chrom_level, -c`: If set, remove scaffolds and contigs from the genomes (optional flag, default: off — all sequences are kept)
 - `--memory, -m`: Memory to use in the cluster for individual quantification jobs (optional, default: 2)
 - `--clean, -cl`: Clean the temporal directory after the run (optional, default: False)
 
