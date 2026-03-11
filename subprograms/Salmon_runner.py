@@ -223,6 +223,13 @@ def main(args):
     else:
         reference_homogenized, alternative_homogenized = fasta_header_homogenizer(reference, alternative, working_directory, chrom_level)
 
+    # Validate that the homogenized reference genome is not empty
+    if os.path.getsize(reference_homogenized) == 0:
+        logging.error(f'The homogenized reference genome {reference_homogenized} is empty. '
+                      f'This likely means all sequences were filtered out. '
+                      f'If your genome uses scaffold/contig naming, run without the --chrom_level / -c flag.')
+        sys.exit(1)
+
     # Add the specific names to the chromosomes (Modification in place)
     # This will help to differentiate the chromosomes from the reference and the alternative genomes for further analysis
 
@@ -284,29 +291,31 @@ def main(args):
     if library_type == 'PE':
         logging.info('Processing paired-end reads...')
         
-        # Pair the fastq files
-        paired_files = pair_fastq_files(input_dir, r1_pattern=r1_pattern, r2_pattern=r2_pattern)
+        # Build file list from input directory and pair the fastq files
+        file_list = [os.path.join(input_dir, f) for f in os.listdir(input_dir)]
+        paired_files, unpaired_files = pair_fastq_files(file_list, r1_pattern=r1_pattern, r2_pattern=r2_pattern)
         
         if not paired_files:
-            logging.error('No paired files found! Check your R1/R2 patterns.')
+            logging.error('No paired files found! Check your R1/R2 patterns and file names.')
             sys.exit(1)
+        
+        if unpaired_files:
+            logging.warning(f'{len(unpaired_files)} files could not be paired and will be skipped: {unpaired_files}')
         
         logging.info(f'Found {len(paired_files)} paired-end samples')
         
-        for base_name, (r1_file, r2_file) in tqdm(paired_files.items(), desc='Quantifying paired files', bar_format=tqdm_format):
-            r1_path = os.path.join(input_dir, r1_file)
-            r2_path = os.path.join(input_dir, r2_file)
+        for r1_path, r2_path in tqdm(paired_files, desc='Quantifying paired files', bar_format=tqdm_format):
             
             # Process R1 file (decompression and extension handling)
             r1_path = process_fastq_file(r1_path, logging)
             if r1_path is None:
-                logging.warning(f"Skipping pair {base_name} due to R1 processing error")
+                logging.warning(f"Skipping pair due to R1 processing error")
                 continue
                 
             # Process R2 file (decompression and extension handling)
             r2_path = process_fastq_file(r2_path, logging)
             if r2_path is None:
-                logging.warning(f"Skipping pair {base_name} due to R2 processing error")
+                logging.warning(f"Skipping pair due to R2 processing error")
                 continue
             
             # Generate and submit job for paired files

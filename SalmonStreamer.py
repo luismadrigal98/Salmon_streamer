@@ -120,8 +120,8 @@ def main():
     # Miscellaneous arguments
     misc_group = run_parser.add_argument_group('Miscellaneous arguments', 'Miscellaneous settings')
     misc_group.add_argument('--threads', '-t', type=int, required=False, help='Number of threads to use', default=1)
-    misc_group.add_argument('--chrom_level', '-c', required=False, 
-                        help='Whether to remove scaffolds and contigs from the genomes', default=True)
+    misc_group.add_argument('--chrom_level', '-c', action='store_true', 
+                        help='If set, remove scaffolds and contigs from the genomes (default: keep all sequences)')
     misc_group.add_argument('--memory', '-m', type=int, required=False, 
                         help='Memory to use in the cluster for individual quantification jobs', default=2)
     misc_group.add_argument('--clean', '-cl', action='store_true', 
