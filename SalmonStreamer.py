@@ -128,7 +128,7 @@ def main():
                         help='Clean the temporal directory after the run', default=False)
     misc_group.add_argument('--email', required=False, 
                         help='Email address for SLURM job notifications (optional)', default=None)
-    misc_group.add_argument('--partition', required=False, 
+    misc_group.add_argument('--partition', required=False,
                         help='SLURM partition to use', default='sixhour,eeb,kucg,kelly')
     misc_group.add_argument('--conda_env', required=False, 
                         help='Conda environment name to activate', default='salmon')

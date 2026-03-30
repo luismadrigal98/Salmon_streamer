@@ -276,8 +276,8 @@ def run_salmon_index(transcriptome_genome, decoy_file, threads, output_dir, outp
     logging.info(f"Salmon index created successfully at {index_dir}")
 
 def master_script_generator(file, w_dir, job_dir, output_dir,
-                            threads, memory, 
-                            salmon_index, 
+                            threads, memory,
+                            salmon_index,
                             quant_options = ['--noLengthCorrection -l A -p 1'],
                             email = None,
                             partition = 'sixhour,eeb,kucg,kelly',

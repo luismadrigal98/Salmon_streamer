@@ -119,24 +119,24 @@ Salmon Streamer provides the following subcommands:
     cd Salmon_streamer
     ```
 
-2. Create and activate a conda environment:
+2. Create and activate the conda environment from the provided YAML file:
     ```bash
-    conda create --name salmon_pipeline python=3.8
-    conda activate salmon_pipeline
+    conda env create -f Env_SalmonStreamer.yml
+    conda activate salmon
     ```
 
-3. Install required packages:
-    ```bash
-    # Core bioinformatics tools
-    conda install -c bioconda salmon liftoff minimap2
-    
-    # Python dependencies
-    pip install pandas numpy scipy tqdm
-    
-    # R and qtl package (if running QTL analysis)
-    conda install -c conda-forge r-base
-    R -e "install.packages('qtl', repos='https://cran.r-project.org')"
-    ```
+    This installs all required dependencies (Python 3.12, Salmon 1.10.3, Liftoff 1.6.2, Minimap2 2.28, pandas, numpy, scipy, tqdm, matplotlib, and more).
+
+    > **Note:** If you prefer to install dependencies manually or need a different Python version, you can instead run:
+    > ```bash
+    > conda create --name salmon python=3.8
+    > conda activate salmon
+    > conda install -c bioconda salmon liftoff minimap2
+    > pip install pandas numpy scipy tqdm
+    > # R and qtl package (if running QTL analysis)
+    > conda install -c conda-forge r-base
+    > R -e "install.packages('qtl', repos='https://cran.r-project.org')"
+    > ```
 
 ## Quick Start
 
