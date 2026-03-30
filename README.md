@@ -121,7 +121,7 @@ Salmon Streamer provides the following subcommands:
 
 2. Create and activate the conda environment from the provided YAML file:
     ```bash
-    conda env create -f Env_SalmonStreamer.yml
+    conda env create -f conda_env.yml
     conda activate salmon
     ```
 
