@@ -200,6 +200,9 @@ def main(args):
         logging.info('Creating the output directory')
         os.mkdir(output_dir)
 
+    # Resolve temporal_directory to an absolute path so job scripts always use absolute paths
+    temporal_directory = os.path.abspath(temporal_directory)
+
     # Check if the temporal directory exists
     if not os.path.isdir(temporal_directory):
         logging.info('Creating the temporal directory')
