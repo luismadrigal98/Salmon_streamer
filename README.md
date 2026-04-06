@@ -295,11 +295,12 @@ python SalmonStreamer.py ProcessSalmonOut \
 ```bash
 python SalmonStreamer.py ProcessPost \
     --crosses SWB SF \
-    --genes-file Genes_to_updated_767_assembly.txt \
     --quant-results-files QUANT_RESULTS_767_vs_SWB QUANT_RESULTS_767_vs_SF \
     --cpm-min 5.0 \
     --output-dir ./processed_output
 ```
+
+`--genes-file` is optional. If provided, only genes in that file are included in the output. If omitted, all genes are included.
 
 ### 5. Quality Control with PCA
 
@@ -517,9 +518,10 @@ Supported R1/R2 patterns:
 **Translate Salmon Outputs**: Organize read counts by allele
 ```bash
 python SalmonStreamer.py TranslateSalmon SWB \
-    --genes-file Genes_mapping.txt \
     --quant-results-file QUANT_RESULTS.txt
 ```
+
+`--genes-file` is optional. If provided, only genes listed in that file are included in the output. If omitted, all genes from the quant results are included.
 
 **Calculate Raw Reads**: Sum total reads per sample
 ```bash

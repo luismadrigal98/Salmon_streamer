@@ -47,8 +47,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Translate Salmon outputs for specific cross')
     parser.add_argument('cross', help='Cross identifier (e.g., SWB, SF)')
-    parser.add_argument('--genes-file', required=True, 
-                       help='Path to genes mapping file (e.g., Genes_to_updated_767_assembly.txt)')
+    parser.add_argument('--genes-file', required=False, default=None,
+                       help='Path to genes mapping file for filtering to a subset of genes (optional). If omitted, all genes are included.')
     parser.add_argument('--quant-results-file', required=True,
                        help='Path to QUANT results file (e.g., QUANT_RESULTS_767_vs_SWB)')
     parser.add_argument('--output-file', 

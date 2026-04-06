@@ -196,38 +196,42 @@ def combine_results(output_dir, result_name = 'table.txt', mode = 'cmd', include
 def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file):
     """
     Take salmon outputs (QUANT) and organize read counts to each allele of each gene per sample.
-    
+
     Parameters
     ----------
     cross : str
         Cross identifier (e.g., SWB, SF)
-    genes_file : str
-        Path to genes mapping file (e.g., Genes_to_updated_767_assembly.txt)
+    genes_file : str or None
+        Path to genes mapping file for filtering to a subset of genes. If None, all genes
+        in the quant results file are included.
     quant_results_file : str
         Path to QUANT results file
     output_file : str
         Output file path
-        
+
     Returns
     -------
     None
     """
-    
+
     print(f"Processing cross: {cross}")
-    
-    # Load included genes
-    includedgenes = {}
-    with open(genes_file, "r") as inx:
-        for line_id, liner in enumerate(inx):
-            colx = liner.replace('\n', '').split('\t')
-            # Chrom	stpos	endpos	old_name	new_name	62	155	444	502	541	664	909	1034	1192	scored_pops	new_chrom	new_start	new_end
-            includedgenes[colx[4] + ".v2.1"] = 1
-    
+
+    # Load included genes (optional filter)
+    if genes_file is not None:
+        includedgenes = {}
+        with open(genes_file, "r") as inx:
+            for line_id, liner in enumerate(inx):
+                colx = liner.replace('\n', '').split('\t')
+                # Chrom	stpos	endpos	old_name	new_name	62	155	444	502	541	664	909	1034	1192	scored_pops	new_chrom	new_start	new_end
+                includedgenes[colx[4] + ".v2.1"] = 1
+    else:
+        includedgenes = None
+
     # Process QUANT results
     data = {}
     plants_in_sequence = []
     fn = [0, 0]  # [found, not_found]
-    
+
     with open(quant_results_file, "r") as src:
         for line_idx, line in enumerate(src):
             cols = line.replace('\n', '').split('\t')
@@ -242,35 +246,32 @@ def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file)
                     print(f"Warning: Line {line_idx + 1} has unexpected format in column 1: '{cols[0]}'")
                     print(f"Expected format: 'allele_gene=gene_name', but found: '{cols[0]}'")
                     continue  # Skip this line
-                
+
                 try:
                     gname = cols[0].split("=")[1]
                 except IndexError:
                     print(f"Error: Line {line_idx + 1} - Cannot extract gene name from: '{cols[0]}'")
                     print(f"Full line: {line.strip()}")
                     continue  # Skip this line
-                
-                try:
-                    nn = includedgenes[gname]
-                    fn[0] += 1
-                    try:
-                        ux = data[gname]
-                    except KeyError:
-                        data[gname] = {"IM767": [], cross: []}
-                    
-                    # Check if allele can be extracted
-                    if "_" not in cols[0]:
-                        print(f"Warning: Line {line_idx + 1} - Cannot extract allele from: '{cols[0]}'")
-                        continue  # Skip this line
-                    
-                    allele = cols[0].split("_")[0]
-                    
-                    for j in range(1, len(cols)):
-                        data[gname][allele].append(cols[j])
-                        
-                except KeyError:
+
+                if includedgenes is not None and gname not in includedgenes:
                     fn[1] += 1
-    
+                    continue
+
+                fn[0] += 1
+                if gname not in data:
+                    data[gname] = {"IM767": [], cross: []}
+
+                # Check if allele can be extracted
+                if "_" not in cols[0]:
+                    print(f"Warning: Line {line_idx + 1} - Cannot extract allele from: '{cols[0]}'")
+                    continue  # Skip this line
+
+                allele = cols[0].split("_")[0]
+
+                for j in range(1, len(cols)):
+                    data[gname][allele].append(cols[j])
+
     # Write output
     with open(output_file, "w") as out1:
         out1.write("GeneID")
@@ -278,14 +279,14 @@ def translate_salmon_outputs(cross, genes_file, quant_results_file, output_file)
             out1.write(f"\t767_{plants_in_sequence[j]}")
             out1.write(f"\t{cross}_{plants_in_sequence[j]}")
         out1.write("\n")
-        
+
         for gname in data:
             out1.write(gname)
             for j in range(len(plants_in_sequence)):
                 out1.write(f"\t{data[gname]['IM767'][j]}")
                 out1.write(f"\t{data[gname][cross][j]}")
             out1.write("\n")
-    
+
     print(f"Processed {cross}: Found {fn[0]}, Not found {fn[1]}")
 
 def calculate_raw_reads_per_plant(salmon_files, output_file):
