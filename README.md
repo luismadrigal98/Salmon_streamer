@@ -32,6 +32,8 @@ Salmon Streamer provides the following subcommands:
 | `ProcessPost` | Run complete post-processing pipeline (combines above three) |
 | `PCA_QC` | Perform PCA-based quality control on expression data |
 | `ParentalDE` | Differential expression analysis between parental lines |
+| **`EdgeRDE`** | **edgeR-based differential expression analysis with PCA and quality control plots** |
+| **`ASEIntegrate`** | **Integrate allele-specific expression with DE results; classify genes as cis/trans-regulated** |
 | `ProcessGenotypes` | Process genotypes from transcript mapping data |
 | `MakePhenotypes` | Generate phenotype files from expression data |
 | `PrepareQTLInputs` | Prepare inputs for QTL analysis in R/qtl format |
@@ -571,6 +573,152 @@ Output includes:
 - Test statistics (t-statistic/U-statistic, p-value)
 - FDR-corrected q-values (Benjamini-Hochberg method)
 - Significance flags
+
+#### Differential Expression Analysis with EdgeRDE
+
+**NEW**: Comprehensive edgeR-based differential expression analysis with publication-quality plots and quality control.
+
+EdgeRDE implements a complete quasi-likelihood edgeR pipeline with TMM normalization, adaptive filtering, and all pairwise group contrasts. It produces:
+- DE results for every gene across all group comparisons
+- Publication-quality plots (volcano, PCA, sample correlation, dispersion)
+- Quality control assessments
+- Summary statistics
+
+**Basic usage**:
+```bash
+python SalmonStreamer.py EdgeRDE \
+    --expression-file counts.tsv \
+    --metadata-file metadata.tsv \
+    --output-dir DE_results/ \
+    --fdr-threshold 0.05 \
+    --logfc-threshold 1.0
+```
+
+**Key parameters**:
+- `--expression-file`: Tab-separated count matrix (genes × samples, raw counts only)
+- `--metadata-file`: Tab-separated metadata with `sample_name` and `group` columns (or `species`+`tissue`)
+- `--group-samples`: Alternatively, specify groups inline: `Group1:s1,s2,s3 Group2:s4,s5,s6`
+- `--sample-suffix`: Regex pattern to strip from column names before matching metadata (e.g., `"_R1_filtered$"`)
+- `--fdr-threshold`: FDR cutoff for significance (default: 0.05)
+- `--logfc-threshold`: Log2-fold-change threshold for categorization (default: 1.0)
+
+**Example with inline groups**:
+```bash
+python SalmonStreamer.py EdgeRDE \
+    --expression-file pepper_counts.tsv \
+    --group-samples BellPepper:BP_1,BP_2,BP_3 ChiliPepper:CP_1,CP_2,CP_3 F1:F1_1,F1_2,F1_3 \
+    --output-dir pepper_DE/
+```
+
+**Output files**:
+- `{group1}_vs_{group2}_DE_results.tsv`: Complete results (all genes, logFC, FDR, etc.)
+- `{group1}_vs_{group2}_significant_genes.tsv`: Filtered to FDR < threshold
+- `{group1}_vs_{group2}_volcano.pdf`: Volcano plots per contrast
+- `PCA_plot.pdf`: Sample clustering by expression
+- `sample_correlation_heatmap.pdf`: Sample similarity heatmap
+- Quality control plots: library sizes, dispersion estimates, top DE genes heatmap
+- `analysis_summary.txt`: Parameter summary and statistics
+
+**Documentation**: See [ASE + DE Integration Workflow](docs/ase_de_integration_workflow.md) and [Output Files Reference](docs/output_files_reference.md).
+
+#### Allele-Specific Expression + DE Integration with ASEIntegrate
+
+**NEW**: Integrate differential expression with allele-specific expression to classify regulatory mechanisms (cis vs. trans).
+
+ASEIntegrate combines DE results with per-gene allele bias to categorize genes into regulatory classes:
+- **cis-regulated**: Gene has regulatory mutations (promoter/enhancer divergence)
+- **trans-regulated**: Expression differences driven by trans factors (TFs, chromatin modifiers)
+- **trans-compensatory**: Cis changes exist but trans factors override them
+- **compensatory**: Cis differences masked by trans compensation
+- **no divergence**: No regulatory divergence detected
+
+This analysis is essential for understanding the evolutionary basis of expression differences in hybrid crosses.
+
+**Basic analysis** (cis/trans categorization):
+```bash
+python SalmonStreamer.py ASEIntegrate \
+    --de-results-dir DE_results/ \
+    --ase-counts-file ase_counts.tsv \
+    --output-dir ASE_DE_results/ \
+    --fdr-threshold 0.05 \
+    --parent1-label parent1 \
+    --parent2-label parent2
+```
+
+**Advanced analysis** (estimate cis and trans effect sizes using Ad/Ed framework):
+```bash
+python SalmonStreamer.py ASEIntegrate \
+    --de-results-dir DE_results/ \
+    --ase-counts-file ase_counts.tsv \
+    --output-dir ASE_DE_results_advanced/ \
+    --fdr-threshold 0.05 \
+    --parent1-label BellPepper \
+    --parent2-label ChiliPepper \
+    --expression-file counts.tsv \
+    --metadata-file metadata.tsv \
+    --hybrid-group F1_hybrid \
+    --parent1-group BellPepper \
+    --parent2-group ChiliPepper
+```
+
+**Key parameters**:
+- `--de-results-dir`: Directory containing `*_DE_results.tsv` files from EdgeRDE
+- `--ase-counts-file`: Tab-separated file with per-gene allele counts (see documentation)
+- `--output-dir`: Output directory
+- `--parent1-label`: Label for parent 1 allele (must match ASE file column name)
+- `--parent2-label`: Label for parent 2 allele (must match ASE file column name)
+- `--fdr-threshold`: FDR cutoff for DE significance
+- `--expression-file`, `--metadata-file`: Required for advanced Ad/Ed analysis
+- `--hybrid-group`, `--parent1-group`, `--parent2-group`: Group labels in metadata for advanced analysis
+
+**Output files**:
+- `{comparison}_with_ASE.tsv`: Merged DE + ASE with gene categories
+- `{comparison}_ASE_category_summary.tsv`: Gene counts per category
+- `{comparison}_ASE_vs_DE.pdf`: Scatter plot (logFC vs. allele bias)
+- `cis_regulatory_candidates_all.tsv`: All cis-regulated genes across comparisons
+- Advanced mode also produces:
+  - `ase_vs_de_ad_ed_data.tsv`: Cis and trans effect estimates (Ad/Ed framework)
+  - `regulatory_divergence_regressions.pdf`: Effect size visualization
+
+**Gene category interpretation**:
+| Category | DE? | Allele Bias? | Meaning |
+|----------|-----|--------------|---------|
+| cis | Yes | Yes | Regulatory mutations in this gene |
+| trans | Yes | No | Trans factors (e.g., TF) regulate expression |
+| trans_compensatory | Yes | Yes (opposite) | Trans factors override cis effects |
+| compensatory | No | Yes | Cis differences masked by trans |
+| no_divergence | No | No | No regulatory divergence |
+
+**Example workflow** (Pepper hybrid cross):
+```bash
+# Step 1: Run EdgeRDE on expression counts
+python SalmonStreamer.py EdgeRDE \
+    --expression-file pepper_counts.tsv \
+    --metadata-file pepper_metadata.tsv \
+    --output-dir pepper_DE/
+
+# Step 2: Run ASEIntegrate with ASE data
+python SalmonStreamer.py ASEIntegrate \
+    --de-results-dir pepper_DE/ \
+    --ase-counts-file pepper_ase.tsv \
+    --output-dir pepper_ASE_DE/ \
+    --parent1-label BellPepper \
+    --parent2-label ChiliPepper \
+    --expression-file pepper_counts.tsv \
+    --metadata-file pepper_metadata.tsv \
+    --hybrid-group F1_hybrid \
+    --parent1-group BellPepper \
+    --parent2-group ChiliPepper
+```
+
+**Documentation & Examples**:
+- [Complete workflow guide](docs/ase_de_integration_workflow.md)
+- [Input format specification](docs/input_format_specification.md)
+- [Output file reference](docs/output_files_reference.md)
+- [Interpretation guidelines](docs/interpretation_guidelines.md)
+- [EdgeRDE example](examples/EdgeRDE_example_arabidopsis.md)
+- [ASE+DE example](examples/ASE_DE_example_pepper.md)
+- [Audit report](AUDIT_ASEIntegrate_EdgeRDE.md)
 
 #### Genotype Processing Pipeline
 

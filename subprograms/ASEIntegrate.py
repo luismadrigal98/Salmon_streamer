@@ -35,6 +35,154 @@ import argparse
 import os
 import sys
 import subprocess
+import glob
+import re
+
+
+def validate_de_results_dir(de_dir):
+    """
+    Validate that DE results directory exists and contains DE result files.
+    
+    Parameters
+    ----------
+    de_dir : str
+        Path to DE results directory.
+    
+    Returns
+    -------
+    list[str]
+        List of found DE result files.
+    
+    Raises
+    ------
+    ValueError
+        If directory doesn't exist or contains no DE results files.
+    """
+    if not os.path.isdir(de_dir):
+        raise ValueError(f"DE results directory not found: {de_dir}")
+    
+    de_files = glob.glob(os.path.join(de_dir, "*_DE_results.tsv"))
+    if not de_files:
+        raise ValueError(
+            f"No *_DE_results.tsv files found in: {de_dir}\n"
+            f"       Run EdgeRDE first to generate DE results."
+        )
+    
+    return de_files
+
+
+def validate_ase_file(filepath, parent1_label, parent2_label):
+    """
+    Validate ASE counts file format and required columns.
+    
+    Parameters
+    ----------
+    filepath : str
+        Path to ASE counts file.
+    parent1_label : str
+        Label for parent 1 (used to construct ratio column name).
+    parent2_label : str
+        Label for parent 2 (used to construct ratio column name).
+    
+    Raises
+    ------
+    ValueError
+        If file format is invalid or required columns are missing.
+    """
+    try:
+        with open(filepath, 'r') as f:
+            lines = f.readlines()
+    except IOError as e:
+        raise ValueError(f"Cannot read ASE counts file: {e}")
+    
+    if len(lines) < 2:
+        raise ValueError("ASE counts file must have at least 2 rows (header + 1 gene)")
+    
+    # Parse header
+    try:
+        header = lines[0].strip().split('\t')
+    except Exception as e:
+        raise ValueError(f"Cannot parse ASE file header: {e}")
+    
+    header_lower = [h.lower() for h in header]
+    
+    # Check required base columns
+    required_cols = ['gene_id', 'snp_count', 'bias_ratio', 'predominant_bias']
+    missing_cols = [col for col in required_cols if col.lower() not in header_lower]
+    if missing_cols:
+        raise ValueError(
+            f"ASE counts file is missing required columns: {', '.join(missing_cols)}\n"
+            f"       Found columns: {', '.join(header)}"
+        )
+    
+    # Check for ratio columns
+    p1_ratio_col = f"{parent1_label}_ratio"
+    p2_ratio_col = f"{parent2_label}_ratio"
+    
+    if p1_ratio_col not in header:
+        raise ValueError(
+            f"ASE counts file is missing column '{p1_ratio_col}'\n"
+            f"       (based on --parent1-label '{parent1_label}')\n"
+            f"       Found columns: {', '.join(header)}"
+        )
+    
+    if p2_ratio_col not in header:
+        raise ValueError(
+            f"ASE counts file is missing column '{p2_ratio_col}'\n"
+            f"       (based on --parent2-label '{parent2_label}')\n"
+            f"       Found columns: {', '.join(header)}"
+        )
+    
+    # Validate data rows
+    p1_idx = header.index(p1_ratio_col)
+    p2_idx = header.index(p2_ratio_col)
+    snp_idx = [i for i, h in enumerate(header_lower) if h == 'snp_count'][0]
+    bias_idx = [i for i, h in enumerate(header_lower) if h == 'bias_ratio'][0]
+    
+    for i, line in enumerate(lines[1:min(6, len(lines))], start=2):  # Check first few rows
+        fields = line.strip().split('\t')
+        if len(fields) < len(header):
+            raise ValueError(
+                f"ASE file row {i} has {len(fields)} columns but header has {len(header)}"
+            )
+        
+        # Validate numeric fields
+        try:
+            snp_count = int(fields[snp_idx])
+        except ValueError:
+            raise ValueError(
+                f"ASE file row {i}: 'snp_count' should be integer, got '{fields[snp_idx]}'"
+            )
+        
+        try:
+            bias_ratio = float(fields[bias_idx])
+            if not (0.0 <= bias_ratio <= 1.0):
+                raise ValueError(f"out of range [0, 1]: {bias_ratio}")
+        except ValueError as e:
+            raise ValueError(
+                f"ASE file row {i}: 'bias_ratio' should be float in [0, 1], "
+                f"got '{fields[bias_idx]}' ({e})"
+            )
+        
+        try:
+            p1_ratio = float(fields[p1_idx])
+            if not (0.0 <= p1_ratio <= 1.0):
+                raise ValueError(f"out of range [0, 1]: {p1_ratio}")
+        except ValueError as e:
+            raise ValueError(
+                f"ASE file row {i}: '{p1_ratio_col}' should be float in [0, 1], "
+                f"got '{fields[p1_idx]}' ({e})"
+            )
+        
+        try:
+            p2_ratio = float(fields[p2_idx])
+            if not (0.0 <= p2_ratio <= 1.0):
+                raise ValueError(f"out of range [0, 1]: {p2_ratio}")
+        except ValueError as e:
+            raise ValueError(
+                f"ASE file row {i}: '{p2_ratio_col}' should be float in [0, 1], "
+                f"got '{fields[p2_idx]}' ({e})"
+            )
 
 
 def main(args):
@@ -47,15 +195,38 @@ def main(args):
         print(f"ERROR: R script not found at {r_script}", file=sys.stderr)
         sys.exit(1)
 
-    # Validate required inputs -------------------------------------------
-    if not os.path.isdir(args.de_results_dir):
-        print(f"ERROR: DE results directory not found: {args.de_results_dir}",
-              file=sys.stderr)
+    # Validate Rscript executable ----------------------------------------
+    if not os.path.isfile(args.rscript_executable):
+        print(
+            f"ERROR: Rscript executable not found at: {args.rscript_executable}\n"
+            f"       Specify a different path with --rscript-executable",
+            file=sys.stderr
+        )
         sys.exit(1)
 
-    if not os.path.isfile(args.ase_counts_file):
-        print(f"ERROR: ASE counts file not found: {args.ase_counts_file}",
-              file=sys.stderr)
+    # Validate DE results directory ----------------------------------------
+    print("Validating DE results directory...", file=sys.stderr)
+    try:
+        de_files = validate_de_results_dir(args.de_results_dir)
+        print(f"Found {len(de_files)} DE results file(s)", file=sys.stderr)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate ASE counts file -------------------------------------------
+    print("Validating ASE counts file...", file=sys.stderr)
+    try:
+        validate_ase_file(args.ase_counts_file, args.parent1_label, args.parent2_label)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate FDR threshold ------------------------------------------
+    if args.fdr_threshold < 0 or args.fdr_threshold > 1:
+        print(
+            f"ERROR: FDR threshold must be between 0 and 1 (got {args.fdr_threshold})",
+            file=sys.stderr
+        )
         sys.exit(1)
 
     # Validate advanced-mode dependencies (all-or-nothing) ----------------
@@ -75,6 +246,22 @@ def main(args):
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Validate advanced mode files if provided
+    if n_advanced == len(advanced_args):
+        if not os.path.isfile(args.expression_file):
+            print(
+                f"ERROR: Expression file not found: {args.expression_file}",
+                file=sys.stderr
+            )
+            sys.exit(1)
+        if not os.path.isfile(args.metadata_file):
+            print(
+                f"ERROR: Metadata file not found: {args.metadata_file}",
+                file=sys.stderr
+            )
+            sys.exit(1)
+        print("Advanced Ad/Ed analysis enabled", file=sys.stderr)
 
     def r_arg(val):
         return val if val is not None else "NULL"
@@ -115,10 +302,21 @@ def main(args):
     print()
 
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, capture_output=False)
     except subprocess.CalledProcessError as e:
-        print(f"ERROR: R script exited with code {e.returncode}", file=sys.stderr)
+        print(
+            f"ERROR: R script failed with exit code {e.returncode}\n"
+            f"       Check the error messages above for details.",
+            file=sys.stderr
+        )
         sys.exit(e.returncode)
+    except FileNotFoundError as e:
+        print(
+            f"ERROR: Cannot find Rscript executable: {args.rscript_executable}\n"
+            f"       {e}",
+            file=sys.stderr
+        )
+        sys.exit(1)
 
     print("\nASEIntegrate complete.")
 
