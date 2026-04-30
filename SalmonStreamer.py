@@ -33,6 +33,8 @@ from subprograms.ProcessGenotypes import main as process_genotypes_main
 from subprograms.MakePhenotypes import main as make_phenotypes_main
 from subprograms.PrepareQTLInputs import main as prepare_qtl_inputs_main
 from subprograms.ParentalDE import main as parental_de_main
+from subprograms.EdgeRDE import main as edger_de_main
+from subprograms.ASEIntegrate import main as ase_integrate_main
 from src.postprocessing_utilities import process_post_pipeline
 
 def main():
@@ -352,6 +354,116 @@ def main():
     parental_de_parser.add_argument('--output-dir', default='./DE_results',
                                    help='Output directory for results (default: ./DE_results)')
     
+    # --- Add EdgeRDE Subcommand ---
+    edger_de_parser = subparsers.add_parser(
+        'EdgeRDE',
+        help='Differential expression analysis using the edgeR quasi-likelihood pipeline'
+    )
+    edger_de_parser.add_argument(
+        '--expression-file', required=True,
+        help='Tab-separated count matrix (genes x samples, first column = gene IDs).'
+    )
+    edger_de_parser.add_argument(
+        '--output-dir', required=True,
+        help='Directory for all output files.'
+    )
+    edger_de_parser.add_argument(
+        '--metadata-file', default=None,
+        help=(
+            'Tab-separated sample metadata. '
+            'Required columns: sample_name, group (or species + tissue). '
+            'Takes priority over --group-samples.'
+        )
+    )
+    edger_de_parser.add_argument(
+        '--group-samples', nargs='+', default=None, metavar='GROUP:s1,s2,...',
+        help=(
+            'Inline group specification used when no metadata file is available. '
+            'Format: GroupLabel:sample1,sample2,... (one entry per group). '
+            'Example: --group-samples SpeciesA:s1,s2 SpeciesB:s3,s4'
+        )
+    )
+    edger_de_parser.add_argument(
+        '--fdr-threshold', type=float, default=0.05,
+        help='FDR significance cutoff (default: 0.05).'
+    )
+    edger_de_parser.add_argument(
+        '--logfc-threshold', type=float, default=1.0,
+        help='|log2FC| threshold for significance categories (default: 1.0).'
+    )
+    edger_de_parser.add_argument(
+        '--sample-suffix', default=None,
+        help=(
+            'Regex pattern stripped from count matrix column names before '
+            'matching to metadata sample_name values '
+            "(e.g. '_R1_filtered$'). Optional."
+        )
+    )
+    edger_de_parser.add_argument(
+        '--rscript-executable',
+        default=os.path.expanduser('~/.conda/envs/PyR/bin/Rscript'),
+        help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
+    )
+
+    # --- Add ASEIntegrate Subcommand ---
+    ase_integrate_parser = subparsers.add_parser(
+        'ASEIntegrate',
+        help='Integrate ASE read counts with EdgeRDE differential expression results'
+    )
+    ase_integrate_parser.add_argument(
+        '--de-results-dir', required=True,
+        help='Directory containing *_DE_results.tsv files from EdgeRDE.'
+    )
+    ase_integrate_parser.add_argument(
+        '--ase-counts-file', required=True,
+        help='Per-gene ASE read counts file (ase_counts_per_gene.txt format).'
+    )
+    ase_integrate_parser.add_argument(
+        '--output-dir', required=True,
+        help='Directory for all output files.'
+    )
+    ase_integrate_parser.add_argument(
+        '--parent1-label', default='parent1',
+        help=(
+            "Value in the 'predominant_bias' column representing parent 1, "
+            "and prefix for the ratio column (e.g. 'barbatus' -> 'barbatus_ratio'). "
+            "Default: 'parent1'."
+        )
+    )
+    ase_integrate_parser.add_argument(
+        '--parent2-label', default='parent2',
+        help="Value in the 'predominant_bias' column representing parent 2. Default: 'parent2'."
+    )
+    ase_integrate_parser.add_argument(
+        '--fdr-threshold', type=float, default=0.05,
+        help='FDR significance cutoff for DE genes (default: 0.05).'
+    )
+    ase_integrate_parser.add_argument(
+        '--expression-file', default=None,
+        help='Count matrix TSV for advanced Ad/Ed regulatory classification (optional).'
+    )
+    ase_integrate_parser.add_argument(
+        '--metadata-file', default=None,
+        help='Sample metadata TSV (required when --expression-file is provided).'
+    )
+    ase_integrate_parser.add_argument(
+        '--hybrid-group', default=None,
+        help="Group label in metadata identifying hybrid/F1 samples (e.g. 'F1_hybrid')."
+    )
+    ase_integrate_parser.add_argument(
+        '--parent1-group', default=None,
+        help="Group label for parent 1 samples in metadata (e.g. 'P_barbatus_Leaf')."
+    )
+    ase_integrate_parser.add_argument(
+        '--parent2-group', default=None,
+        help="Group label for parent 2 samples in metadata (e.g. 'P_virgatus_Leaf')."
+    )
+    ase_integrate_parser.add_argument(
+        '--rscript-executable',
+        default=os.path.expanduser('~/.conda/envs/PyR/bin/Rscript'),
+        help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
+    )
+
     # Parse arguments
     args = parser.parse_args()
     
@@ -391,6 +503,10 @@ def main():
         prepare_qtl_inputs_main(args)
     elif args.command == 'ParentalDE':
         parental_de_main(args)
+    elif args.command == 'EdgeRDE':
+        edger_de_main(args)
+    elif args.command == 'ASEIntegrate':
+        ase_integrate_main(args)
     else:
         parser.print_help()
 
