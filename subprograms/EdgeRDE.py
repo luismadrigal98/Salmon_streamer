@@ -85,14 +85,14 @@ def validate_expression_file(filepath):
                 raise ValueError(
                     f"Row {i} has {len(fields)} columns but header has {len(header)}"
                 )
-            # Try to convert all count columns to numbers
+            # Try to convert all count columns to numbers (accept int or float)
             for count_str in fields[1:]:
                 try:
-                    int(count_str)
+                    float(count_str)
                 except ValueError:
                     raise ValueError(
                         f"Row {i}, column {fields[0]}: "
-                        f"expected integer count, got '{count_str}'"
+                        f"expected numeric count, got '{count_str}'"
                     )
         except Exception as e:
             raise ValueError(f"Error validating expression file row {i}: {e}")
