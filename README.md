@@ -920,6 +920,18 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Recent Updates
 
+### Version 1.2.0 (May 2026)
+
+**New Features:**
+- ✨ **EdgeRDE module**: Full edgeR quasi-likelihood differential expression pipeline with TMM normalization, adaptive `filterByExpr` filtering, all pairwise group contrasts, PCA, sample-correlation heatmap, volcano plots, and a summary report
+- ✨ **ASEIntegrate module**: Combine EdgeRDE results with per-gene allele-specific expression to classify regulatory divergence (cis, trans, cis+trans, compensatory) and optionally estimate Ad/Ed effect sizes
+- ✨ **TMM-normalized expression export**: New `--export-normalized-expression` flag on `EdgeRDE` writes the TMM-normalized CPM matrix, log2-CPM matrix, and per-sample normalization factors for manual inspection. Format selectable via `--normalized-expression-format {tsv,csv}` (default `tsv`)
+
+**Improvements:**
+- Expression file validation now accepts both integer and float counts
+- Expanded examples directory with EdgeRDE (Arabidopsis) and ASE + DE (pepper) workflows
+- Documentation: added ASE + DE integration workflow, input format spec, output files reference, and interpretation guidelines
+
 ### Version 1.1.0 (October 2025)
 
 **New Features:**
@@ -952,6 +964,13 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - Refactored code for better maintainability
 
 ## Changelog
+
+### v1.2.0 - May 2026
+- Added `EdgeRDE` subcommand: edgeR quasi-likelihood DE pipeline with TMM normalization, adaptive filtering, all pairwise contrasts, PCA, sample-correlation heatmap, volcano plots, dispersion plots, and a summary report.
+- Added `ASEIntegrate` subcommand: merges EdgeRDE results with per-gene ASE counts, classifies regulatory divergence, and optionally estimates Ad/Ed effect sizes.
+- Added `--export-normalized-expression` and `--normalized-expression-format` to `EdgeRDE`, producing `TMM_normalized_CPM`, `TMM_normalized_logCPM`, and `TMM_norm_factors` files for manual inspection.
+- Expression file validation now accepts integer or float counts.
+- Expanded `docs/` and `examples/` with EdgeRDE / ASE + DE integration material.
 
 ### v1.1.1 - March 2026
 - **Fixed** `--chrom_level` / `-c` flag now defaults to off (keep all sequences). Previously defaulted to `True`, which silently discarded all scaffold/contig-named sequences and caused an empty decoy file error for assemblies using scaffold-based naming.

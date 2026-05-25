@@ -6,7 +6,7 @@ Salmon streamer is a compilation of a bioinformatic pipeline for RNA-seq data an
 
 @date: 2026-05-25
 
-@version: 1.1.0
+@version: 1.2.0
 
 """
 

@@ -202,6 +202,22 @@ python SalmonStreamer.py EdgeRDE \
     --output-dir results/
 ```
 
+**Export TMM-normalized expression for manual inspection** (e.g. to plot a custom heatmap or feed expression values into a non-edgeR tool):
+```bash
+python SalmonStreamer.py EdgeRDE \
+    --expression-file arabidopsis_counts.tsv \
+    --metadata-file arabidopsis_metadata.tsv \
+    --output-dir results/ \
+    --export-normalized-expression \
+    --normalized-expression-format tsv
+```
+This adds the following files to `--output-dir`:
+- `TMM_normalized_CPM.tsv` — TMM-normalized CPM matrix (genes × samples, post-`filterByExpr`)
+- `TMM_normalized_logCPM.tsv` — log2-CPM matrix used internally for PCA and the sample-correlation heatmap
+- `TMM_norm_factors.tsv` — per-sample `LibSize`, `NormFactor`, and `EffectiveLibSize`
+
+Use `--normalized-expression-format csv` to emit CSV instead of TSV. See [Output Files Reference](../docs/output_files_reference.md#optional-normalized-expression-exports) for column details.
+
 ---
 
 ## See Also

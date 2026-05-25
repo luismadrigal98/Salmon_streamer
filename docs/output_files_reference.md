@@ -253,6 +253,43 @@ Packages: edgeR 3.40.x, limma 3.54.x, ggplot2 3.4.x, pheatmap 1.0.x
 
 ---
 
+### Optional Normalized Expression Exports
+
+Produced only when `--export-normalized-expression` is set. Format is selected by `--normalized-expression-format {tsv,csv}` (default `tsv`).
+
+#### `TMM_normalized_CPM.{tsv,csv}`
+
+**Description**: TMM-normalized counts-per-million matrix, computed as `edgeR::cpm(dge, log = FALSE, normalized.lib.sizes = TRUE)` after `calcNormFactors(method = "TMM")` and `filterByExpr` filtering.
+
+**Columns**:
+- `TranscriptID`: gene / transcript identifier (same set as the `*_DE_results.tsv` files, i.e. post-filter)
+- One column per retained sample, header = sample name (after any `--sample-suffix` stripping)
+
+**Usage**: Manual inspection of expression on a sample-comparable scale; input for downstream visualization, clustering, or co-expression analyses outside the pipeline.
+
+#### `TMM_normalized_logCPM.{tsv,csv}`
+
+**Description**: log2-CPM matrix, computed as `edgeR::cpm(dge, log = TRUE, normalized.lib.sizes = TRUE)`. This is the exact matrix EdgeRDE uses internally for PCA and the sample-correlation heatmap, so values can be cross-checked against those plots.
+
+**Columns**: same shape as `TMM_normalized_CPM` but on the log2 scale.
+
+**Usage**: Recommended for plotting, heatmaps, and any downstream method that expects approximately variance-stabilized expression values.
+
+#### `TMM_norm_factors.{tsv,csv}`
+
+**Description**: Per-sample library size and TMM normalization factors used to derive the CPM matrices above.
+
+**Columns**:
+- `Sample`: sample identifier
+- `Group`: experimental group from the metadata
+- `LibSize`: raw library size (sum of counts after filtering)
+- `NormFactor`: TMM normalization factor from `calcNormFactors`
+- `EffectiveLibSize`: `LibSize * NormFactor` — the denominator effectively used by `cpm()`
+
+**Usage**: Sanity-check normalization (factors should hover around 1.0); reproduce CPM values manually; flag samples with unusually low effective library sizes.
+
+---
+
 ### Summary of EdgeRDE Output Files
 
 | File | Type | Count | Purpose |
@@ -268,8 +305,11 @@ Packages: edgeR 3.40.x, limma 3.54.x, ggplot2 3.4.x, pheatmap 1.0.x
 | `DE_genes_heatmap.pdf` | Plot | 1 | Top DE genes expression |
 | `analysis_summary.txt` | Text | 1 | Parameters & summary stats |
 | `session_info.txt` | Text | 1 | R environment info |
+| `TMM_normalized_CPM.{tsv,csv}` | Data | 0 or 1 | TMM-normalized CPM matrix (optional) |
+| `TMM_normalized_logCPM.{tsv,csv}` | Data | 0 or 1 | log2-CPM matrix used for PCA (optional) |
+| `TMM_norm_factors.{tsv,csv}` | Data | 0 or 1 | Per-sample lib size & TMM factors (optional) |
 
-**Total files**: ~11 + (2-3 × number of comparisons)
+**Total files**: ~11 + (2-3 × number of comparisons), plus 3 more when `--export-normalized-expression` is set
 
 ---
 
