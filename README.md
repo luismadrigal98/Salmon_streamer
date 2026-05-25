@@ -873,7 +873,7 @@ If you use Salmon Streamer in your research, please cite:
 ```
 Madrigal-Roca, L.J., Veltsos, P., & Kelly, J.K. (2025). 
 Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis (Version 1.0.0) [Computer software]. 
-Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
+Zenodo. https://doi.org/10.5281/zenodo.20381998
 ```
 
 ### BibTeX Format
