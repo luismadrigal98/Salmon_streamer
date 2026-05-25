@@ -9,7 +9,8 @@
 #
 # Usage (called by SalmonStreamer EdgeRDE):
 #   Rscript edger_de.R <input_file> <output_dir> <metadata_file> \
-#                      [fdr_threshold] [logfc_threshold] [sample_suffix]
+#                      [fdr_threshold] [logfc_threshold] [sample_suffix] \
+#                      [export_normalized] [normalized_format]
 #
 # Arguments:
 #   input_file       Tab-separated count matrix (genes x samples).
@@ -38,6 +39,12 @@
 #   sample_suffix    Regex stripped from count matrix column names before
 #                    matching to metadata sample_name values.
 #                    Example: "_R1_filtered$". Pass "NULL" to skip.
+#   export_normalized "TRUE" or "FALSE". When TRUE, write the TMM-normalized
+#                    expression matrices (CPM and log2-CPM) plus the per-sample
+#                    normalization factors to <output_dir> for manual inspection.
+#                    Default: FALSE.
+#   normalized_format "tsv" or "csv". Output format used when export_normalized
+#                    is TRUE. Default: tsv.
 ################################################################################
 
 options(bitmapType = "cairo")
@@ -71,6 +78,12 @@ metadata_arg    <- args[3]
 fdr_threshold   <- if (length(args) >= 4) as.numeric(args[4]) else 0.05
 logfc_threshold <- if (length(args) >= 5) as.numeric(args[5]) else 1.0
 sample_suffix   <- if (length(args) >= 6 && args[6] != "NULL") args[6] else NULL
+export_normalized <- if (length(args) >= 7) toupper(args[7]) == "TRUE" else FALSE
+normalized_format <- if (length(args) >= 8) tolower(args[8]) else "tsv"
+
+if (!normalized_format %in% c("tsv", "csv")) {
+  stop("normalized_format must be 'tsv' or 'csv' (got '", normalized_format, "')")
+}
 
 metadata_file <- if (metadata_arg == "NULL") NULL else metadata_arg
 
@@ -81,7 +94,10 @@ cat("Input file     :", input_file, "\n")
 cat("Output dir     :", output_dir, "\n")
 cat("Metadata file  :", ifelse(is.null(metadata_file), "(none)", metadata_file), "\n")
 cat("FDR threshold  :", fdr_threshold, "\n")
-cat("logFC threshold:", logfc_threshold, "\n\n")
+cat("logFC threshold:", logfc_threshold, "\n")
+cat("Export normalized expression:",
+    ifelse(export_normalized, paste0("yes (", normalized_format, ")"), "no"),
+    "\n\n")
 
 # ---------------------------------------------------------------------------
 # 1. Load count matrix
@@ -178,6 +194,59 @@ cat("Genes after filterByExpr:", nrow(dge), "\n")
 
 dge <- calcNormFactors(dge, method = "TMM")
 cat("TMM factors:", paste(round(dge$samples$norm.factors, 3), collapse = ", "), "\n\n")
+
+# ---------------------------------------------------------------------------
+# 3b. Optional export of TMM-normalized expression matrices
+# ---------------------------------------------------------------------------
+
+if (export_normalized) {
+  cat("Exporting TMM-normalized expression matrices (", normalized_format, ")...\n",
+      sep = "")
+
+  cpm_matrix     <- cpm(dge, log = FALSE, normalized.lib.sizes = TRUE)
+  logcpm_matrix  <- cpm(dge, log = TRUE,  normalized.lib.sizes = TRUE)
+
+  cpm_df <- data.frame(
+    TranscriptID = rownames(cpm_matrix),
+    cpm_matrix,
+    check.names  = FALSE,
+    stringsAsFactors = FALSE
+  )
+  logcpm_df <- data.frame(
+    TranscriptID = rownames(logcpm_matrix),
+    logcpm_matrix,
+    check.names  = FALSE,
+    stringsAsFactors = FALSE
+  )
+  norm_factors_df <- data.frame(
+    Sample        = rownames(dge$samples),
+    Group         = dge$samples$group,
+    LibSize       = dge$samples$lib.size,
+    NormFactor    = dge$samples$norm.factors,
+    EffectiveLibSize = dge$samples$lib.size * dge$samples$norm.factors,
+    stringsAsFactors = FALSE
+  )
+
+  if (normalized_format == "tsv") {
+    cpm_file       <- file.path(output_dir, "TMM_normalized_CPM.tsv")
+    logcpm_file    <- file.path(output_dir, "TMM_normalized_logCPM.tsv")
+    factors_file   <- file.path(output_dir, "TMM_norm_factors.tsv")
+    write_tsv(cpm_df,         cpm_file)
+    write_tsv(logcpm_df,      logcpm_file)
+    write_tsv(norm_factors_df, factors_file)
+  } else {
+    cpm_file       <- file.path(output_dir, "TMM_normalized_CPM.csv")
+    logcpm_file    <- file.path(output_dir, "TMM_normalized_logCPM.csv")
+    factors_file   <- file.path(output_dir, "TMM_norm_factors.csv")
+    write_csv(cpm_df,         cpm_file)
+    write_csv(logcpm_df,      logcpm_file)
+    write_csv(norm_factors_df, factors_file)
+  }
+
+  cat("  CPM         :", cpm_file, "\n")
+  cat("  log2-CPM    :", logcpm_file, "\n")
+  cat("  Norm factors:", factors_file, "\n\n")
+}
 
 # ---------------------------------------------------------------------------
 # 4. Exploratory plots

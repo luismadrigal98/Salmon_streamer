@@ -321,6 +321,8 @@ def main(args):
 
     # Build R command ------------------------------------------------------
     sample_suffix = args.sample_suffix if args.sample_suffix else "NULL"
+    export_normalized = getattr(args, "export_normalized_expression", False)
+    normalized_format = getattr(args, "normalized_expression_format", "tsv")
 
     cmd = [
         args.rscript_executable,
@@ -331,6 +333,8 @@ def main(args):
         str(args.fdr_threshold),
         str(args.logfc_threshold),
         sample_suffix,
+        "TRUE" if export_normalized else "FALSE",
+        normalized_format,
     ]
 
     print("=" * 70)
@@ -343,6 +347,8 @@ def main(args):
     print(f"logFC threshold : {args.logfc_threshold}")
     if args.sample_suffix:
         print(f"Sample suffix   : {args.sample_suffix}")
+    if export_normalized:
+        print(f"Export normalized expression: yes ({normalized_format})")
     print()
 
     try:
@@ -439,6 +445,21 @@ Examples:
             "Regex pattern stripped from count matrix column names before "
             "matching to metadata sample_name values "
             "(e.g. '_R1_filtered$'). Optional."
+        )
+    )
+    parser.add_argument(
+        "--export-normalized-expression", action="store_true",
+        help=(
+            "Export the TMM-normalized expression matrices (CPM and log2-CPM) "
+            "plus per-sample normalization factors to the output directory "
+            "for manual inspection."
+        )
+    )
+    parser.add_argument(
+        "--normalized-expression-format", choices=["tsv", "csv"], default="tsv",
+        help=(
+            "Output format for the TMM-normalized expression matrices "
+            "when --export-normalized-expression is set (default: tsv)."
         )
     )
     parser.add_argument(

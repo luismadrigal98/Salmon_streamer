@@ -4,9 +4,9 @@ Salmon streamer is a compilation of a bioinformatic pipeline for RNA-seq data an
 
 @author: Luis Javier Madrigal Roca, Paris Veltsos and John K. Kelly.
 
-@date: 2025-04-30
+@date: 2026-05-25
 
-@version: 1.0.0
+@version: 1.1.0
 
 """
 
@@ -397,6 +397,21 @@ def main():
             'Regex pattern stripped from count matrix column names before '
             'matching to metadata sample_name values '
             "(e.g. '_R1_filtered$'). Optional."
+        )
+    )
+    edger_de_parser.add_argument(
+        '--export-normalized-expression', action='store_true',
+        help=(
+            'Export the TMM-normalized expression matrices (CPM and log2-CPM) '
+            'plus per-sample normalization factors to the output directory '
+            'for manual inspection.'
+        )
+    )
+    edger_de_parser.add_argument(
+        '--normalized-expression-format', choices=['tsv', 'csv'], default='tsv',
+        help=(
+            'Output format for the TMM-normalized expression matrices '
+            'when --export-normalized-expression is set (default: tsv).'
         )
     )
     edger_de_parser.add_argument(

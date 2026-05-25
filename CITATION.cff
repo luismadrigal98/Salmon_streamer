@@ -2,9 +2,9 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis"
-version: 1.0.0
+version: 1.1.0
 doi: 10.5281/zenodo.15800356
-date-released: 2025-07-03
+date-released: 2026-05-25
 url: "https://github.com/luismadrigal98/Salmon_streamer"
 repository-code: "https://github.com/luismadrigal98/Salmon_streamer"
 abstract: >-
@@ -64,11 +64,11 @@ preferred-citation:
       email: "jkk@ku.edu"
       affiliation: "University of Kansas"
       orcid: "https://orcid.org/0000-0001-9480-1252"
-  version: 1.0.0
-  doi: 10.5281/zenodo.XXXXXXX
-  date-released: 2025-01-01
+  version: 1.1.0
+  doi: 10.5281/zenodo.15800356
+  date-released: 2026-05-25
   url: "https://github.com/luismadrigal98/Salmon_streamer"
-  year: 2025
+  year: 2026
 references:
   - type: article
     title: "Salmon provides fast and bias-aware quantification of transcript expression"
