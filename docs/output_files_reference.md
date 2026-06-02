@@ -313,6 +313,52 @@ Produced only when `--export-normalized-expression` is set. Format is selected b
 
 ---
 
+## EdgeRDEFromNormalized Outputs
+
+Location: `--output-dir` specified during `EdgeRDEFromNormalized` run.
+
+This subcommand runs limma-trend on a pre-normalized expression matrix (log-CPM or CPM with internal log-transform). Its output set is a strict subset of `EdgeRDE` — it drops the count-model-specific QC plots (`dispersion_plot.pdf`, `QL_dispersion_plot.pdf`, `library_sizes.pdf`) and the TMM export files (TMM is not re-run), but keeps everything ASEIntegrate consumes.
+
+### File set
+
+| File | Type | Count | Purpose |
+|------|------|-------|---------|
+| `{comparison}_DE_results.tsv` | Data | N = comparisons | Complete DE stats per contrast (limma-trend) |
+| `{comparison}_significant_genes.tsv` | Data | N = comparisons | Filtered to FDR < `--fdr-threshold` |
+| `{comparison}_volcano.{pdf,png}` | Plot | N = comparisons | Volcano plot per contrast |
+| `PCA_plot.{pdf,png}` | Plot | 1 | Sample clustering on the input log-CPM matrix |
+| `sample_correlation_heatmap.pdf` | Plot | 1 | Pearson correlations between samples |
+| `DE_genes_heatmap.pdf` | Plot | 0 or 1 | Top DE genes heatmap (only when any genes pass `--fdr-threshold`) |
+| `analysis_summary.txt` | Text | 1 | Parameters, dimensions, per-contrast significant counts |
+| `session_info.txt` | Text | 1 | R environment / package versions |
+
+**Total files**: ~5 + (2-3 × number of comparisons).
+
+### DE table columns
+
+`{comparison}_DE_results.tsv` keeps the same schema as `EdgeRDE` for downstream compatibility with `ASEIntegrate`:
+
+| Column | Source | Meaning |
+|--------|--------|---------|
+| `TranscriptID` | rownames | Gene / transcript identifier |
+| `logFC` | limma | log2 fold change for the contrast (group1 − group2) |
+| `logCPM` | limma `AveExpr` | Mean log2-CPM across all samples (renamed) |
+| `t` | limma | Moderated t-statistic |
+| `PValue` | limma `P.Value` | Raw p-value (renamed) |
+| `FDR` | limma `adj.P.Val` | Benjamini-Hochberg adjusted p-value (renamed) |
+| `B` | limma | log-odds of differential expression |
+| `Significance` | added | `Not Significant` / `Significant` / `Highly Significant` based on `--fdr-threshold` and `--logfc-threshold` |
+
+Note that `EdgeRDE` instead produces an `F` column (quasi-likelihood F-statistic) where `EdgeRDEFromNormalized` produces `t` and `B`. ASEIntegrate uses `logFC` and `FDR` only, so the swap is harmless.
+
+### Notes on interpretation
+
+- **No `library_sizes.pdf` / `dispersion_plot.pdf`**: these are diagnostics of the count model; they don't apply when the input is already normalized.
+- **PCA is on the input log-CPM matrix**, not a re-normalized one. If you've collapsed paralogs, the PCA reflects the collapsed structure — which is usually what you want.
+- **`analysis_summary.txt`** records the resolved `input_scale` (`logcpm` vs `cpm`) and the `prior_count` actually used, so you can reproduce the log-transform later if needed.
+
+---
+
 ## ASEIntegrate Outputs
 
 Location: `--output-dir` specified during ASEIntegrate run

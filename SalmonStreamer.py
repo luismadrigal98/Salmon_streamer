@@ -34,6 +34,7 @@ from subprograms.MakePhenotypes import main as make_phenotypes_main
 from subprograms.PrepareQTLInputs import main as prepare_qtl_inputs_main
 from subprograms.ParentalDE import main as parental_de_main
 from subprograms.EdgeRDE import main as edger_de_main
+from subprograms.EdgeRDEFromNormalized import main as edger_de_from_normalized_main
 from subprograms.ASEIntegrate import main as ase_integrate_main
 from src.postprocessing_utilities import process_post_pipeline
 
@@ -420,6 +421,67 @@ def main():
         help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
     )
 
+    # --- Add EdgeRDEFromNormalized Subcommand ---
+    edger_de_norm_parser = subparsers.add_parser(
+        'EdgeRDEFromNormalized',
+        help=('Differential expression on a pre-normalized expression matrix '
+              '(limma-trend; use after collapsing paralogs in TMM-normalized data)')
+    )
+    edger_de_norm_parser.add_argument(
+        '--expression-file', required=True,
+        help='Tab-separated normalized expression matrix (genes x samples, first column = TranscriptID).'
+    )
+    edger_de_norm_parser.add_argument(
+        '--output-dir', required=True,
+        help='Directory for all output files.'
+    )
+    edger_de_norm_parser.add_argument(
+        '--metadata-file', default=None,
+        help=(
+            'Tab-separated sample metadata. Required columns: sample_name, group '
+            '(or species + tissue). Takes priority over --group-samples.'
+        )
+    )
+    edger_de_norm_parser.add_argument(
+        '--group-samples', nargs='+', default=None, metavar='GROUP:s1,s2,...',
+        help=(
+            'Inline group specification when no metadata file is available. '
+            "Format: 'GroupLabel:sample1,sample2,...' (one entry per group)."
+        )
+    )
+    edger_de_norm_parser.add_argument(
+        '--input-scale', choices=['auto', 'logcpm', 'cpm'], default='auto',
+        help=(
+            "Scale of the input matrix. 'logcpm' = use as-is; "
+            "'cpm' = apply log2(x + prior_count); "
+            "'auto' = detect from the data (default)."
+        )
+    )
+    edger_de_norm_parser.add_argument(
+        '--prior-count', type=float, default=0.25,
+        help="Pseudo-count added before log2 when --input-scale is 'cpm' (default: 0.25)."
+    )
+    edger_de_norm_parser.add_argument(
+        '--fdr-threshold', type=float, default=0.05,
+        help='FDR significance cutoff (default: 0.05).'
+    )
+    edger_de_norm_parser.add_argument(
+        '--logfc-threshold', type=float, default=1.0,
+        help='|log2FC| threshold for significance categories (default: 1.0).'
+    )
+    edger_de_norm_parser.add_argument(
+        '--sample-suffix', default=None,
+        help=(
+            'Regex pattern stripped from expression matrix column names before '
+            "matching to metadata sample_name values (e.g. '_R1_filtered$'). Optional."
+        )
+    )
+    edger_de_norm_parser.add_argument(
+        '--rscript-executable',
+        default=os.path.expanduser('~/.conda/envs/PyR/bin/Rscript'),
+        help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
+    )
+
     # --- Add ASEIntegrate Subcommand ---
     ase_integrate_parser = subparsers.add_parser(
         'ASEIntegrate',
@@ -520,6 +582,8 @@ def main():
         parental_de_main(args)
     elif args.command == 'EdgeRDE':
         edger_de_main(args)
+    elif args.command == 'EdgeRDEFromNormalized':
+        edger_de_from_normalized_main(args)
     elif args.command == 'ASEIntegrate':
         ase_integrate_main(args)
     else:

@@ -33,6 +33,7 @@ Salmon Streamer provides the following subcommands:
 | `PCA_QC` | Perform PCA-based quality control on expression data |
 | `ParentalDE` | Differential expression analysis between parental lines |
 | **`EdgeRDE`** | **edgeR-based differential expression analysis with PCA and quality control plots** |
+| **`EdgeRDEFromNormalized`** | **limma-trend DE on a pre-normalized expression matrix (e.g. after collapsing paralogs in TMM-normalized data)** |
 | **`ASEIntegrate`** | **Integrate allele-specific expression with DE results; classify genes as cis/trans-regulated** |
 | `ProcessGenotypes` | Process genotypes from transcript mapping data |
 | `MakePhenotypes` | Generate phenotype files from expression data |
@@ -621,6 +622,46 @@ python SalmonStreamer.py EdgeRDE \
 
 **Documentation**: See [ASE + DE Integration Workflow](docs/ase_de_integration_workflow.md) and [Output Files Reference](docs/output_files_reference.md).
 
+#### Differential Expression on a Pre-Normalized Matrix with EdgeRDEFromNormalized
+
+**NEW**: Run DE directly on an already-normalized expression matrix using the **limma-trend** workflow.
+
+Use this when the standard EdgeRDE pipeline cannot be reused because you no longer have raw integer counts. Typical scenarios:
+- You exported `TMM_normalized_CPM.tsv` / `TMM_normalized_logCPM.tsv` via EdgeRDE's `--export-normalized-expression` flag and then **collapsed paralogs** (or other grouped features) by summing TMM-normalized CPMs outside the pipeline.
+- You received a normalized expression matrix from a collaborator and only need the DE step plus the standard plots.
+
+`EdgeRDEFromNormalized` accepts either a log2-CPM matrix (used as-is) or a raw CPM matrix (log-transformed internally with a configurable prior). It fits per-group linear models with `limma::lmFit`, applies all pairwise contrasts with `contrasts.fit`, and shrinks variances with `eBayes(trend = TRUE)` — the workflow the limma user guide recommends for already-normalized expression data. Outputs mirror the EdgeRDE format (same DE table columns, same volcano / PCA / heatmap / summary files), so they slot directly into `ASEIntegrate` downstream.
+
+**Basic usage** (log2-CPM input, scale auto-detected):
+```bash
+python SalmonStreamer.py EdgeRDEFromNormalized \
+    --expression-file TMM_normalized_logCPM.collapsed.tsv \
+    --metadata-file metadata.tsv \
+    --output-dir DE_results_collapsed/
+```
+
+**With raw CPM input** (the script applies `log2(x + prior_count)` internally):
+```bash
+python SalmonStreamer.py EdgeRDEFromNormalized \
+    --expression-file TMM_normalized_CPM.collapsed.tsv \
+    --metadata-file metadata.tsv \
+    --output-dir DE_results_collapsed/ \
+    --input-scale cpm \
+    --prior-count 0.25
+```
+
+**Key parameters**:
+- `--expression-file`: Tab-separated normalized expression matrix (genes × samples, first column = `TranscriptID`)
+- `--metadata-file`: Same format as EdgeRDE (`sample_name` + `group`, or `species` + `tissue`)
+- `--group-samples`: Inline alternative to `--metadata-file` (e.g. `Group1:s1,s2,s3 Group2:s4,s5,s6`)
+- `--input-scale {auto,logcpm,cpm}`: Scale of the input matrix. `auto` flags log-CPM whenever any negative values are present (default)
+- `--prior-count`: Pseudo-count added before `log2` when `--input-scale cpm` (default `0.25`, matches edgeR's default)
+- `--fdr-threshold`, `--logfc-threshold`, `--sample-suffix`, `--rscript-executable`: same semantics as `EdgeRDE`
+
+**Output files**: identical layout to `EdgeRDE` — `{group1}_vs_{group2}_DE_results.tsv`, `{group1}_vs_{group2}_significant_genes.tsv`, `{group1}_vs_{group2}_volcano.{pdf,png}`, `PCA_plot.{pdf,png}`, `sample_correlation_heatmap.pdf`, `DE_genes_heatmap.pdf`, `analysis_summary.txt`, `session_info.txt`. The DE table columns are renamed from limma's defaults to match the EdgeRDE schema (`adj.P.Val` → `FDR`, `P.Value` → `PValue`, `AveExpr` → `logCPM`) so `ASEIntegrate` works without modification.
+
+**Why limma-trend and not edgeR's QL test?** edgeR's quasi-likelihood pipeline assumes negative-binomial-distributed integer counts and uses per-gene dispersions estimated from the count-level model. Once data have been TMM-normalized to CPM (and especially once they've been summed across paralogs), those distributional assumptions no longer hold. limma-trend instead models log-CPM with a mean-variance trend, which is the standard recommendation for normalized data and is implemented as `lmFit → contrasts.fit → eBayes(trend = TRUE)`.
+
 #### Allele-Specific Expression + DE Integration with ASEIntegrate
 
 **NEW**: Integrate differential expression with allele-specific expression to classify regulatory mechanisms (cis vs. trans).
@@ -924,6 +965,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 **New Features:**
 - ✨ **EdgeRDE module**: Full edgeR quasi-likelihood differential expression pipeline with TMM normalization, adaptive `filterByExpr` filtering, all pairwise group contrasts, PCA, sample-correlation heatmap, volcano plots, and a summary report
+- ✨ **EdgeRDEFromNormalized module**: limma-trend DE on a pre-normalized expression matrix. Designed for the "export TMM → collapse paralogs → re-analyze" workflow, but works on any matrix on a sample-comparable log-CPM or CPM scale. Outputs mirror EdgeRDE so `ASEIntegrate` plugs in unchanged.
 - ✨ **ASEIntegrate module**: Combine EdgeRDE results with per-gene allele-specific expression to classify regulatory divergence (cis, trans, cis+trans, compensatory) and optionally estimate Ad/Ed effect sizes
 - ✨ **TMM-normalized expression export**: New `--export-normalized-expression` flag on `EdgeRDE` writes the TMM-normalized CPM matrix, log2-CPM matrix, and per-sample normalization factors for manual inspection. Format selectable via `--normalized-expression-format {tsv,csv}` (default `tsv`)
 
@@ -967,6 +1009,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ### v1.2.0 - May 2026
 - Added `EdgeRDE` subcommand: edgeR quasi-likelihood DE pipeline with TMM normalization, adaptive filtering, all pairwise contrasts, PCA, sample-correlation heatmap, volcano plots, dispersion plots, and a summary report.
+- Added `EdgeRDEFromNormalized` subcommand: limma-trend DE on a pre-normalized expression matrix (e.g. paralog-collapsed TMM CPM/log-CPM). Auto-detects log-CPM vs CPM input, produces the same DE table schema and plot set as `EdgeRDE`, and is compatible with `ASEIntegrate` downstream.
 - Added `ASEIntegrate` subcommand: merges EdgeRDE results with per-gene ASE counts, classifies regulatory divergence, and optionally estimates Ad/Ed effect sizes.
 - Added `--export-normalized-expression` and `--normalized-expression-format` to `EdgeRDE`, producing `TMM_normalized_CPM`, `TMM_normalized_logCPM`, and `TMM_norm_factors` files for manual inspection.
 - Expression file validation now accepts integer or float counts.
