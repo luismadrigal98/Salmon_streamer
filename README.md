@@ -873,8 +873,8 @@ If you use Salmon Streamer in your research, please cite:
 ```
 Madrigal-Roca, L.J., Veltsos, P., & Kelly, J.K. (2025). 
 Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis (Version 1.0.0) [Computer software]. 
-Zenodo. https://doi.org/10.5281/zenodo.20381998
-```
+Zenodo. 
+```https://doi.org/10.5281/zenodo.20381998
 
 ### BibTeX Format
 ```bibtex
@@ -883,10 +883,10 @@ Zenodo. https://doi.org/10.5281/zenodo.20381998
                   Veltsos, Paris and
                   Kelly, John K.},
   title        = {Salmon Streamer: A Comprehensive Pipeline for RNA-seq to QTL Analysis},
-  version      = {1.0.0},
+  version      = {1.2.0},
   publisher    = {Zenodo},
   year         = {2025},
-  doi          = {10.5281/zenodo.XXXXXXX},
+  doi          = {10.5281/zenodo.20381998},
   url          = {https://github.com/luismadrigal98/Salmon_streamer}
 }
 ```
