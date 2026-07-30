@@ -36,6 +36,8 @@ from subprograms.ParentalDE import main as parental_de_main
 from subprograms.EdgeRDE import main as edger_de_main
 from subprograms.EdgeRDEFromNormalized import main as edger_de_from_normalized_main
 from subprograms.ASEIntegrate import main as ase_integrate_main
+from subprograms.ParalogGroups import main as paralog_groups_main
+from subprograms.ParalogGroups import add_arguments as paralog_groups_arguments
 from src.postprocessing_utilities import process_post_pipeline
 
 def main():
@@ -228,6 +230,12 @@ def main():
     qtl_parser.add_argument('--job-completion-stringency', type=float, default=0.75,
                             help="Required fraction of successful jobs (default: 0.75)")
     
+    # --- Add ParalogGroups Subcommand ---
+    paralog_parser = subparsers.add_parser('ParalogGroups',
+                                          help='Group genes into paralog sets from Salmon equivalence classes '
+                                               '(requires quant run with --dumpEq --hardFilter)')
+    paralog_groups_arguments(paralog_parser)
+
     # --- Add TranslateSalmon Subcommand ---
     translate_parser = subparsers.add_parser('TranslateSalmon', help='Translate Salmon outputs and organize read counts by allele')
     translate_parser.add_argument('cross', help='Cross identifier (e.g., SWB, SF)')
@@ -586,6 +594,8 @@ def main():
         edger_de_from_normalized_main(args)
     elif args.command == 'ASEIntegrate':
         ase_integrate_main(args)
+    elif args.command == 'ParalogGroups':
+        paralog_groups_main(args)
     else:
         parser.print_help()
 
