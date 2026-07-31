@@ -29,19 +29,30 @@ are aggregated by label here.
 """
 
 import argparse
+import gzip
 import os
 import sys
 from collections import defaultdict
 
 
+def _open_maybe_gzip(path):
+    """Salmon >=1.x writes aux_info/eq_classes.txt.gz; older versions wrote it plain.
+    Sniff the magic number rather than trusting the extension."""
+    with open(path, "rb") as probe:
+        magic = probe.read(2)
+    if magic == b"\x1f\x8b":
+        return gzip.open(path, "rt")
+    return open(path)
+
+
 def parse_eq_classes(path):
-    """Read a Salmon eq_classes.txt.
+    """Read a Salmon eq_classes.txt (plain or gzipped).
 
     Returns (transcript_names, {frozenset(label_indices): total_count}).
     Handles both the --dumpEq and the --dumpEq --dumpEqWeights layouts by
     inferring which is present from the field count of each line.
     """
-    with open(path) as handle:
+    with _open_maybe_gzip(path) as handle:
         try:
             n_txp = int(next(handle).strip())
             n_eq = int(next(handle).strip())
@@ -157,6 +168,11 @@ def add_arguments(parser):
         help="A group must be supported in at least this many samples (default: 1).",
     )
     parser.add_argument(
+        "--gene-table", default=None,
+        help="Also write a per-gene TSV giving the raw read split (unique vs shared) "
+             "behind each group, so the fractions can be audited directly.",
+    )
+    parser.add_argument(
         "--min-ambiguity", type=float, default=0.0,
         help="Keep only groups where the least-ambiguous member has at least this "
              "fraction of its reads shared with the rest of the group. Use ~0.9 for "
@@ -214,6 +230,14 @@ def main(args):
             "per_member_ambiguity": ",".join(
                 f"{g}:{member_ambiguity[g]:.3f}" for g in genes
             ),
+            # Raw counts behind the fractions, so the split can be audited directly
+            # rather than taken on faith.
+            "per_member_unique_reads": ",".join(
+                f"{g}:{total_unique[g]:.0f}" for g in genes
+            ),
+            "per_member_total_reads": ",".join(
+                f"{g}:{total_unique[g] + total_shared_by_gene[g]:.0f}" for g in genes
+            ),
         })
 
     rows.sort(key=lambda r: (-r["shared_reads"], r["genes"]))
@@ -221,6 +245,7 @@ def main(args):
     columns = [
         "n_genes", "genes", "shared_reads", "n_samples_supporting",
         "min_member_ambiguity", "max_member_ambiguity", "per_member_ambiguity",
+        "per_member_unique_reads", "per_member_total_reads",
     ]
     with open(args.output, "w") as out:
         out.write("\t".join(columns) + "\n")
@@ -229,6 +254,32 @@ def main(args):
                 f"{row[c]:.2f}" if isinstance(row[c], float) else str(row[c])
                 for c in columns
             ) + "\n")
+
+    # Optional per-gene view: the raw read split behind every group, one row per gene.
+    if args.gene_table:
+        in_groups = defaultdict(list)
+        for r in rows:
+            for g in r["genes"].split(","):
+                in_groups[g].append(r)
+        gcols = ["gene", "unique_reads", "shared_reads", "total_reads",
+                 "fraction_shared", "n_groups", "largest_group_ambiguity", "partners"]
+        with open(args.gene_table, "w") as out:
+            out.write("\t".join(gcols) + "\n")
+            for gene in sorted(in_groups):
+                uniq = total_unique[gene]
+                shar = total_shared_by_gene[gene]
+                tot = uniq + shar
+                grps = in_groups[gene]
+                worst = max(float(r["per_member_ambiguity"].split(f"{gene}:")[1].split(",")[0])
+                            for r in grps)
+                partners = sorted({p for r in grps for p in r["genes"].split(",") if p != gene})
+                out.write("\t".join([
+                    gene, f"{uniq:.0f}", f"{shar:.0f}", f"{tot:.0f}",
+                    f"{(shar / tot if tot else 0):.3f}", str(len(grps)),
+                    f"{worst:.3f}", ",".join(partners),
+                ]) + "\n")
+        print(f"per-gene read split for {len(in_groups)} genes -> {args.gene_table}",
+              file=sys.stderr)
 
     n_pairs = sum(1 for r in rows if r["n_genes"] == 2)
     print(
