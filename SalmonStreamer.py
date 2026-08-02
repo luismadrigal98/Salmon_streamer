@@ -38,6 +38,10 @@ from subprograms.EdgeRDEFromNormalized import main as edger_de_from_normalized_m
 from subprograms.ASEIntegrate import main as ase_integrate_main
 from subprograms.ParalogGroups import main as paralog_groups_main
 from subprograms.ParalogGroups import add_arguments as paralog_groups_arguments
+from subprograms.ParalogTreeCheck import main as paralog_tree_check_main
+from subprograms.ParalogTreeCheck import add_arguments as paralog_tree_check_arguments
+from subprograms.ParalogMerge import main as paralog_merge_main
+from subprograms.ParalogMerge import add_arguments as paralog_merge_arguments
 from src.postprocessing_utilities import process_post_pipeline
 
 def main():
@@ -235,6 +239,18 @@ def main():
                                           help='Group genes into paralog sets from Salmon equivalence classes '
                                                '(requires quant run with --dumpEq --hardFilter)')
     paralog_groups_arguments(paralog_parser)
+
+    # --- Add ParalogTreeCheck Subcommand ---
+    paralog_tree_parser = subparsers.add_parser('ParalogTreeCheck',
+                                          help='Ground-truth paralog groups against Newick gene trees and '
+                                               'calibrate the ambiguity cutoff')
+    paralog_tree_check_arguments(paralog_tree_parser)
+
+    # --- Add ParalogMerge Subcommand ---
+    paralog_merge_parser = subparsers.add_parser('ParalogMerge',
+                                          help='Collapse paralogous genes into single features to make a '
+                                               'DE analysis paralog-aware')
+    paralog_merge_arguments(paralog_merge_parser)
 
     # --- Add TranslateSalmon Subcommand ---
     translate_parser = subparsers.add_parser('TranslateSalmon', help='Translate Salmon outputs and organize read counts by allele')
@@ -596,6 +612,10 @@ def main():
         ase_integrate_main(args)
     elif args.command == 'ParalogGroups':
         paralog_groups_main(args)
+    elif args.command == 'ParalogTreeCheck':
+        paralog_tree_check_main(args)
+    elif args.command == 'ParalogMerge':
+        paralog_merge_main(args)
     else:
         parser.print_help()
 

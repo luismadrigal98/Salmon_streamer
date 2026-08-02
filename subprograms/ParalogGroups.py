@@ -34,6 +34,12 @@ import os
 import sys
 from collections import defaultdict
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from subprograms.ParalogTreeCheck import (          # noqa: E402
+    add_tree_arguments, groups_from_rows, run_calibration,
+)
+
 
 def _open_maybe_gzip(path):
     """Salmon >=1.x writes aux_info/eq_classes.txt.gz; older versions wrote it plain.
@@ -176,8 +182,14 @@ def add_arguments(parser):
         "--min-ambiguity", type=float, default=0.0,
         help="Keep only groups where the least-ambiguous member has at least this "
              "fraction of its reads shared with the rest of the group. Use ~0.9 for "
-             "near-identical copies, 0 to report everything (default: 0).",
+             "near-identical copies, 0 to report everything (default: 0). Calibrate "
+             "this against gene trees with ParalogTreeCheck rather than guessing -- "
+             "0.9 is far stricter than tree-confirmed duplicates require.",
     )
+    # Optional inline gene-tree calibration. The same analysis is available as the
+    # ParalogTreeCheck subcommand, which reads a finished table and so can be re-run
+    # in seconds; use that when sweeping cutoffs, and these flags for a one-shot run.
+    add_tree_arguments(parser, required_group=False)
     return parser
 
 
@@ -287,6 +299,19 @@ def main(args):
         f"({n_pairs} pairs, {len(rows) - n_pairs} larger) -> {args.output}",
         file=sys.stderr,
     )
+
+    # Optional inline calibration against gene trees.
+    if getattr(args, "trees", None):
+        if args.min_ambiguity > 0:
+            print(
+                f"warning: calibrating against trees with --min-ambiguity "
+                f"{args.min_ambiguity} already applied. Groups below that cutoff are "
+                f"absent from the table, so sensitivity will look artificially low. "
+                f"Re-run with --min-ambiguity 0 to calibrate honestly.",
+                file=sys.stderr,
+            )
+        run_calibration(groups_from_rows(rows), args.trees, args)
+
     return 0
 
 
