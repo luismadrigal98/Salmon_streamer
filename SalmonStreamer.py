@@ -44,6 +44,8 @@ from subprograms.ParalogMerge import main as paralog_merge_main
 from subprograms.ParalogMerge import add_arguments as paralog_merge_arguments
 from subprograms.ParalogTracks import main as paralog_tracks_main
 from subprograms.ParalogTracks import add_arguments as paralog_tracks_arguments
+from subprograms.MakeTxp2Gene import main as make_txp2gene_main
+from subprograms.MakeTxp2Gene import add_arguments as make_txp2gene_arguments
 from src.postprocessing_utilities import process_post_pipeline
 
 def main():
@@ -91,6 +93,7 @@ def main():
     extract_trans_parser.add_argument('--id-prefix', default=None, help='Prefix to add to transcript IDs in output FASTA headers')
     extract_trans_parser.add_argument('--include-gene-id', action='store_true', help='Include gene ID in FASTA headers')
     extract_trans_parser.add_argument('--min-length', type=int, default=1, help='Minimum transcript length to include (default: 1)')
+    extract_trans_parser.add_argument('--txp2gene', default=None, help='Also write a two-column transcript-to-gene TSV, keyed by the FASTA headers actually written (required by ParalogGroups/ParalogMerge)')
 
     # Create the run subcommand parser (from Salmon_runner.py)
     run_parser = subparsers.add_parser('RunSalmonQuant', help='Run Salmon pipeline for RNA-seq quantification')
@@ -236,6 +239,13 @@ def main():
     qtl_parser.add_argument('--job-completion-stringency', type=float, default=0.75,
                             help="Required fraction of successful jobs (default: 0.75)")
     
+    # --- Add MakeTxp2Gene Subcommand ---
+    txp2gene_parser = subparsers.add_parser('MakeTxp2Gene',
+                                          help='Derive a transcript-to-gene map from a GFF3, for a '
+                                               'transcriptome that already exists (ExtractTranscriptome '
+                                               '--txp2gene emits one directly when building a new transcriptome)')
+    make_txp2gene_arguments(txp2gene_parser)
+
     # --- Add ParalogGroups Subcommand ---
     paralog_parser = subparsers.add_parser('ParalogGroups',
                                           help='Group genes into paralog sets from Salmon equivalence classes '
@@ -626,6 +636,8 @@ def main():
         paralog_merge_main(args)
     elif args.command == 'ParalogTracks':
         paralog_tracks_main(args)
+    elif args.command == 'MakeTxp2Gene':
+        sys.exit(make_txp2gene_main(args))
     else:
         parser.print_help()
 

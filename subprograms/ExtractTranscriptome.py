@@ -254,9 +254,12 @@ def main(args):
     id_prefix = args.id_prefix
     include_gene_id = args.include_gene_id
     min_length = args.min_length
-    
+    txp2gene_path = getattr(args, 'txp2gene', None)
+
     # Create output directory if needed
     os.makedirs(os.path.dirname(os.path.abspath(output_fasta)), exist_ok=True)
+    if txp2gene_path:
+        os.makedirs(os.path.dirname(os.path.abspath(txp2gene_path)), exist_ok=True)
     
     # Read genome sequences
     logging.info(f"Reading genome FASTA: {genome_fasta}")
@@ -278,7 +281,12 @@ def main(args):
     extracted_count = 0
     skipped_count = 0
     short_count = 0
-    
+    # Collected inside the write loop rather than from the GFF, so the keys are the
+    # exact FASTA header Salmon will index. Deriving them separately re-implements the
+    # header construction below and silently drifts whenever it changes.
+    txp2gene_rows = []
+    missing_parent = 0
+
     try:
         with open(output_fasta, 'w') as outfile:
             for transcript_id, transcript_info in transcripts.items():
@@ -315,7 +323,18 @@ def main(args):
                     header_parts.append(f"gene:{transcript_info['gene_id']}")
                 
                 header = '_'.join(header_parts) if len(header_parts) > 1 else header_parts[0]
-                
+
+                if txp2gene_path:
+                    gene_id = transcript_info.get('gene_id')
+                    if gene_id:
+                        txp2gene_rows.append((header, gene_id))
+                    else:
+                        # No Parent= on the transcript. Mapping it to itself keeps the
+                        # transcript as its own gene, which is the same thing that
+                        # happens to any name absent from the map downstream.
+                        txp2gene_rows.append((header, header))
+                        missing_parent += 1
+
                 # Write to FASTA
                 outfile.write(f">{header}\n")
                 
@@ -331,7 +350,27 @@ def main(args):
     except IOError as e:
         logging.error(f"Error writing output FASTA file {output_fasta}: {e}")
         sys.exit(1)
-    
+
+    if txp2gene_path:
+        try:
+            with open(txp2gene_path, 'w') as mapfile:
+                for transcript_name, gene_name in txp2gene_rows:
+                    mapfile.write(f"{transcript_name}\t{gene_name}\n")
+        except IOError as e:
+            logging.error(f"Error writing transcript-to-gene map {txp2gene_path}: {e}")
+            sys.exit(1)
+        n_genes = len({gene for _, gene in txp2gene_rows})
+        logging.info(
+            f"Transcript-to-gene map: {txp2gene_path} "
+            f"({len(txp2gene_rows)} transcripts -> {n_genes} genes)"
+        )
+        if missing_parent:
+            logging.warning(
+                f"{missing_parent} transcript(s) had no Parent= attribute and were "
+                f"mapped to themselves. If that is most of them, the GFF3 likely "
+                f"nests features differently than --transcript-types/--gene-types assume."
+            )
+
     # Summary
     logging.info(f"Transcriptome extraction completed!")
     logging.info(f"Output file: {output_fasta}")
@@ -381,6 +420,10 @@ Examples:
                         help='Include gene ID in FASTA headers')
     parser.add_argument('--min-length', type=int, default=1,
                         help='Minimum transcript length to include (default: 1)')
-    
+    parser.add_argument('--txp2gene', default=None,
+                        help='Also write a two-column transcript-to-gene TSV for the '
+                             'extracted transcripts, keyed by the FASTA header actually '
+                             'written. Required by ParalogGroups/ParalogMerge.')
+
     args = parser.parse_args()
     main(args)

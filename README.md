@@ -35,6 +35,7 @@ Salmon Streamer provides the following subcommands:
 | **`EdgeRDE`** | **edgeR-based differential expression analysis with PCA and quality control plots** |
 | **`EdgeRDEFromNormalized`** | **limma-trend DE on a pre-normalized expression matrix (e.g. after collapsing paralogs in TMM-normalized data)** |
 | **`ASEIntegrate`** | **Integrate allele-specific expression with DE results; classify genes as cis/trans-regulated** |
+| **`MakeTxp2Gene`** | **Derive a transcript-to-gene map from a GFF3, validated against the transcriptome that was indexed** |
 | **`ParalogGroups`** | **Group genes whose reads map equally well to every copy, from Salmon equivalence classes** |
 | **`ParalogTreeCheck`** | **Ground-truth those groups against Newick gene trees and calibrate the ambiguity cutoff** |
 | **`ParalogMerge`** | **Collapse unresolvable paralogs into single features to make a DE analysis paralog-aware** |
@@ -671,6 +672,30 @@ python SalmonStreamer.py EdgeRDEFromNormalized \
 Some genes cannot be told apart by RNAseq reads. When every read that hits one copy hits the others equally well, Salmon's per-gene count is one arbitrary split of a shared pool rather than a measurement, and a DE test on that number is testing the EM's initialisation. These four subcommands find those genes, verify the calls against gene trees, and collapse the unresolvable ones into single features.
 
 The important design point: **ambiguity alone does not make a gene unusable.** The EM estimator is unbiased at every ambiguity level; what degrades is variance, roughly as `1/sqrt(unique reads)`. A gene sharing 90% of its reads but holding thousands of its own is estimated fine, while a gene sharing 40% with almost no unique reads is not. So the merge criterion is *"can this copy be estimated by itself?"* — the conjunction of `--min-ambiguity` and `--min-unique-reads` — not *"is it a paralog?"*.
+
+**Step 0 — get a transcript-to-gene map.** Everything below works at the gene level, so it needs to know which transcripts belong to the same gene. Two routes, depending on whether the transcriptome already exists:
+
+*Building the transcriptome here* — ask for the map at the same time, and it comes out consistent by construction:
+
+```bash
+python SalmonStreamer.py ExtractTranscriptome \
+    --genome genome.fasta --gff annotation.gff3 \
+    --output transcriptome.fasta \
+    --txp2gene txp2gene.tsv
+```
+
+*Transcriptome already indexed* — derive the map from the GFF3 and check it against what was indexed:
+
+```bash
+python SalmonStreamer.py MakeTxp2Gene \
+    --gff annotation.gff3 \
+    --transcriptome transcriptome.fasta \
+    -o txp2gene.tsv
+```
+
+Pass `--transcriptome` whenever you can. If the map's transcript names do not match the names Salmon indexed, nothing errors — the unmatched transcripts quietly become their own genes and the paralog groups come out empty or wrong in a way that looks like biology rather than plumbing. `MakeTxp2Gene` reports the overlap up front, fails outright when nothing matches, and takes `--require-complete` to make partial coverage fatal in a scripted pipeline.
+
+Two details worth knowing. `ExtractTranscriptome` keys the map on the **FASTA header it actually writes**, so `--id-prefix` and `--include-gene-id` are accounted for automatically — a map derived separately from the GFF3 would key on the bare transcript ID and match nothing. And the dual-genome `GenerateTranscriptome` path extracts **gene** features directly, so its transcriptome is already gene-level and needs no map at all; omit `--txp2gene` there and each sequence is treated as its own gene, which is correct.
 
 **Step 1 — quantify with equivalence classes.** The group detection reads Salmon's own equivalence-class output, so the quantification must be run with the relevant flags:
 
