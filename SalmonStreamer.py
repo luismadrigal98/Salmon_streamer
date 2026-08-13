@@ -42,6 +42,8 @@ from subprograms.ParalogTreeCheck import main as paralog_tree_check_main
 from subprograms.ParalogTreeCheck import add_arguments as paralog_tree_check_arguments
 from subprograms.ParalogMerge import main as paralog_merge_main
 from subprograms.ParalogMerge import add_arguments as paralog_merge_arguments
+from subprograms.ParalogTracks import main as paralog_tracks_main
+from subprograms.ParalogTracks import add_arguments as paralog_tracks_arguments
 from src.postprocessing_utilities import process_post_pipeline
 
 def main():
@@ -251,6 +253,12 @@ def main():
                                           help='Collapse paralogous genes into single features to make a '
                                                'DE analysis paralog-aware')
     paralog_merge_arguments(paralog_merge_parser)
+
+    # --- Add ParalogTracks Subcommand ---
+    paralog_tracks_parser = subparsers.add_parser('ParalogTracks',
+                                          help='Write IGV tracks and loci from a paralog group table '
+                                               'so groups can be checked against the alignments')
+    paralog_tracks_arguments(paralog_tracks_parser)
 
     # --- Add TranslateSalmon Subcommand ---
     translate_parser = subparsers.add_parser('TranslateSalmon', help='Translate Salmon outputs and organize read counts by allele')
@@ -616,6 +624,8 @@ def main():
         paralog_tree_check_main(args)
     elif args.command == 'ParalogMerge':
         paralog_merge_main(args)
+    elif args.command == 'ParalogTracks':
+        paralog_tracks_main(args)
     else:
         parser.print_help()
 

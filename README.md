@@ -35,6 +35,10 @@ Salmon Streamer provides the following subcommands:
 | **`EdgeRDE`** | **edgeR-based differential expression analysis with PCA and quality control plots** |
 | **`EdgeRDEFromNormalized`** | **limma-trend DE on a pre-normalized expression matrix (e.g. after collapsing paralogs in TMM-normalized data)** |
 | **`ASEIntegrate`** | **Integrate allele-specific expression with DE results; classify genes as cis/trans-regulated** |
+| **`ParalogGroups`** | **Group genes whose reads map equally well to every copy, from Salmon equivalence classes** |
+| **`ParalogTreeCheck`** | **Ground-truth those groups against Newick gene trees and calibrate the ambiguity cutoff** |
+| **`ParalogMerge`** | **Collapse unresolvable paralogs into single features to make a DE analysis paralog-aware** |
+| **`ParalogTracks`** | **Write IGV tracks and loci so paralog groups can be checked against the alignments** |
 | `ProcessGenotypes` | Process genotypes from transcript mapping data |
 | `MakePhenotypes` | Generate phenotype files from expression data |
 | `PrepareQTLInputs` | Prepare inputs for QTL analysis in R/qtl format |
@@ -627,7 +631,7 @@ python SalmonStreamer.py EdgeRDE \
 **NEW**: Run DE directly on an already-normalized expression matrix using the **limma-trend** workflow.
 
 Use this when the standard EdgeRDE pipeline cannot be reused because you no longer have raw integer counts. Typical scenarios:
-- You exported `TMM_normalized_CPM.tsv` / `TMM_normalized_logCPM.tsv` via EdgeRDE's `--export-normalized-expression` flag and then **collapsed paralogs** (or other grouped features) by summing TMM-normalized CPMs outside the pipeline.
+- You exported `TMM_normalized_CPM.tsv` / `TMM_normalized_logCPM.tsv` via EdgeRDE's `--export-normalized-expression` flag and then **collapsed paralogs** (or other grouped features) by summing TMM-normalized CPMs. Note that collapsing paralogs no longer has to happen outside the pipeline — see [Paralog-Aware Differential Expression](#paralog-aware-differential-expression) for the `ParalogGroups → ParalogTreeCheck → ParalogMerge` route, which derives the groups from the data and merges at the count level, before normalization.
 - You received a normalized expression matrix from a collaborator and only need the DE step plus the standard plots.
 
 `EdgeRDEFromNormalized` accepts either a log2-CPM matrix (used as-is) or a raw CPM matrix (log-transformed internally with a configurable prior). It fits per-group linear models with `limma::lmFit`, applies all pairwise contrasts with `contrasts.fit`, and shrinks variances with `eBayes(trend = TRUE)` — the workflow the limma user guide recommends for already-normalized expression data. Outputs mirror the EdgeRDE format (same DE table columns, same volcano / PCA / heatmap / summary files), so they slot directly into `ASEIntegrate` downstream.
@@ -661,6 +665,82 @@ python SalmonStreamer.py EdgeRDEFromNormalized \
 **Output files**: identical layout to `EdgeRDE` — `{group1}_vs_{group2}_DE_results.tsv`, `{group1}_vs_{group2}_significant_genes.tsv`, `{group1}_vs_{group2}_volcano.{pdf,png}`, `PCA_plot.{pdf,png}`, `sample_correlation_heatmap.pdf`, `DE_genes_heatmap.pdf`, `analysis_summary.txt`, `session_info.txt`. The DE table columns are renamed from limma's defaults to match the EdgeRDE schema (`adj.P.Val` → `FDR`, `P.Value` → `PValue`, `AveExpr` → `logCPM`) so `ASEIntegrate` works without modification.
 
 **Why limma-trend and not edgeR's QL test?** edgeR's quasi-likelihood pipeline assumes negative-binomial-distributed integer counts and uses per-gene dispersions estimated from the count-level model. Once data have been TMM-normalized to CPM (and especially once they've been summed across paralogs), those distributional assumptions no longer hold. limma-trend instead models log-CPM with a mean-variance trend, which is the standard recommendation for normalized data and is implemented as `lmFit → contrasts.fit → eBayes(trend = TRUE)`.
+
+#### Paralog-Aware Differential Expression
+
+Some genes cannot be told apart by RNAseq reads. When every read that hits one copy hits the others equally well, Salmon's per-gene count is one arbitrary split of a shared pool rather than a measurement, and a DE test on that number is testing the EM's initialisation. These four subcommands find those genes, verify the calls against gene trees, and collapse the unresolvable ones into single features.
+
+The important design point: **ambiguity alone does not make a gene unusable.** The EM estimator is unbiased at every ambiguity level; what degrades is variance, roughly as `1/sqrt(unique reads)`. A gene sharing 90% of its reads but holding thousands of its own is estimated fine, while a gene sharing 40% with almost no unique reads is not. So the merge criterion is *"can this copy be estimated by itself?"* — the conjunction of `--min-ambiguity` and `--min-unique-reads` — not *"is it a paralog?"*.
+
+**Step 1 — quantify with equivalence classes.** The group detection reads Salmon's own equivalence-class output, so the quantification must be run with the relevant flags:
+
+```bash
+salmon quant -i <index> -l A -1 r1.fq -2 r2.fq -o <outdir> \
+    --dumpEq --dumpEqWeights --hardFilter
+```
+
+`--hardFilter` is what makes a class label mean "these reads map equally well to exactly this set of transcripts"; without it the labels include sub-optimal mappings and the groups are not interpretable.
+
+**Step 2 — call the groups.**
+
+```bash
+python SalmonStreamer.py ParalogGroups \
+    --eq-files quant_dirs/*/aux_info/eq_classes.txt.gz \
+    --txp2gene txp2gene.tsv \
+    --min-samples 3 --min-reads 10 --min-ambiguity 0 \
+    -o paralog_groups_all.tsv \
+    --gene-table paralog_genes_readsplit.tsv
+```
+
+Keep `--min-ambiguity 0` here. Filtering at generation time bakes a cutoff into a file that takes hours to rebuild; the cutoff belongs downstream, where it can be re-derived in seconds.
+
+**Step 3 — calibrate the cutoff against gene trees.** Do not guess this threshold.
+
+```bash
+python SalmonStreamer.py ParalogTreeCheck \
+    --groups paralog_groups_all.tsv \
+    --trees genetrees/*.rtf \
+    --tree-report paralog_tree_pairs.tsv \
+    --calibration-report paralog_cutoff_calibration.tsv
+```
+
+This resolves tree tip labels to gene IDs, classifies every within-genome pair by patristic distance and whether its MRCA is a genome-specific clade, and sweeps the ambiguity cutoff reporting sensitivity against the tree-confirmed duplications. In practice the intuitive-looking `0.9` can retain *none* of them — read the `sensitivity` column rather than picking a round number.
+
+**Step 4 — build the merged features.**
+
+```bash
+python SalmonStreamer.py ParalogMerge \
+    --groups paralog_groups_all.tsv \
+    --txp2gene txp2gene.tsv \
+    --quant-dirs quant_dirs/*_quant \
+    --min-ambiguity 0.2 --min-unique-reads 20 \
+    -o merged_counts.tsv \
+    --out-map paralog_features_map.tsv \
+    --out-tx2gene paralog_tx2feature.tsv \
+    --out-report paralog_features_report.tsv
+```
+
+Merged features are named `PARA_<first gene>_n<k>`. Omit `--quant-dirs`/`--counts` to emit only the feature definition — the map depends on the groups, not on any particular quantification, so one map applies to whichever counts the DE analysis uses.
+
+Two routes downstream:
+- **`--out-tx2gene` + tximport (preferred).** `paralog_tx2feature.tsv` is a drop-in replacement for `tx2gene`; tximport aggregates and also computes the average transcript-length offsets that edgeR/DESeq2 use. Summing counts by hand does not produce those offsets.
+- **`-o merged_counts.tsv`** for a merged matrix directly. `ParalogMerge` verifies read conservation (total in = total out) and stops rather than writing a matrix that fails it.
+
+Groups are *not* a partition — a gene can appear in several called groups — so `ParalogMerge` resolves them to connected components, guaranteeing every gene lands in exactly one feature and nothing is double-counted.
+
+**Step 5 — check the calls by eye (optional but recommended).**
+
+```bash
+python SalmonStreamer.py ParalogTracks \
+    --groups paralog_groups_all.tsv \
+    --gff annotation.gff \
+    --min-ambiguity 0.2 --min-samples 20 \
+    --prefix paralog_groups_calibrated
+```
+
+Writes `<prefix>.bed` (BED score = ambiguity × 1000, so strong groups shade darker) and `<prefix>_loci.txt` (paste-able IGV coordinates). Load the **plain aligned BAM**, not a secondary-filtered one — the multimapping reads are the evidence, and filtering has removed exactly what you are looking for. Aligners give reads they could not place uniquely MAPQ 0 (STAR uses 0–3, reserving 255 for unique) and IGV draws those pale, so a genuine group reads as a washed-out pile-up spanning every copy.
+
+**Interpreting a merged feature.** A merged feature is not a failed gene. The *sum* is often better measured than a typical single gene because it pools more reads — you lose which copy, not how much. Report the result at the feature level; the individual copy's expression is not separately measurable. Genes left unmerged kept enough unique reads to stand alone and can be read directly, though a gene sharing a substantial read fraction still deserves the caveat in the text.
 
 #### Allele-Specific Expression + DE Integration with ASEIntegrate
 
