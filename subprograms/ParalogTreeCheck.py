@@ -68,11 +68,8 @@ def strip_rtf(raw):
     return re.sub(r"[{}]", "", raw)
 
 
-def extract_newick(text):
-    """Return the first balanced parenthetical, terminated at its ';' if present."""
-    start = text.find("(")
-    if start < 0:
-        return None
+def _balanced_end(text, start):
+    """Index of the ')' closing the '(' at `start`, or -1 if it never closes."""
     depth = 0
     for i in range(start, len(text)):
         if text[i] == "(":
@@ -80,8 +77,46 @@ def extract_newick(text):
         elif text[i] == ")":
             depth -= 1
             if depth == 0:
-                semi = text.find(";", i)
-                return text[start:semi + 1] if semi >= 0 else text[start:i + 1]
+                return i
+    return -1
+
+
+def extract_newick(text):
+    """Return the first balanced parenthetical that is actually a Newick tree.
+
+    Taking the first '(' in the file is not safe: these trees are exported with a
+    human-readable title above them, and a title like
+    '2ODD Family (FNS_ANS_ FLS_ F3H) In Newick format:' opens a balanced group of
+    its own. Anchoring there swallows the title and the tree together, and the
+    parse then dies on text that looks structurally impossible.
+
+    So each candidate '(' is tested against two properties every Newick tree has
+    and a prose parenthetical does not: it contains a ',' (a tree has at least two
+    children), and its closing ')' is followed only by an optional label/branch
+    length and then ';' or end of input. The first candidate satisfying both wins.
+    """
+    candidates = [i for i, char in enumerate(text) if char == "("]
+    fallback = None
+    for start in candidates:
+        end = _balanced_end(text, start)
+        if end < 0:
+            continue
+        if "," not in text[start:end]:
+            continue                                  # prose, not a tree
+        if fallback is None:
+            fallback = (start, end)
+        # Skip a root label and/or ':branchlength', then demand a terminator.
+        cursor = end + 1
+        while cursor < len(text) and text[cursor] not in ",();":
+            cursor += 1
+        if cursor >= len(text):
+            return text[start:end + 1]
+        if text[cursor] == ";":
+            return text[start:cursor + 1]
+    if fallback is not None:
+        start, end = fallback
+        semi = text.find(";", end)
+        return text[start:semi + 1] if semi >= 0 else text[start:end + 1]
     return None
 
 
@@ -358,12 +393,25 @@ def collect_pairs(tree_files, resolve):
                 genome_specific = bool(clade_tips) and all(
                     resolve(t.name) for t in clade_tips
                 )
+                # How far is the nearest gene from another taxon that sits inside
+                # this pair's own clade? Bare non-monophyly is not evidence of
+                # anything when every branch involved is ~0 -- an unresolved
+                # near-polytomy nests foreign tips at random. Comparing that
+                # distance against the pair's own separates a real interloper from
+                # topological noise.
+                foreign = [t for t in clade_tips if not resolve(t.name)]
+                nearest_foreign = min(
+                    (min(patristic(tip_a, t)[0], patristic(tip_b, t)[0])
+                     for t in foreign),
+                    default=None,
+                )
                 pairs.append({
                     "family": family,
                     "a": gene_a, "b": gene_b,
                     "distance": distance,
                     "genome_specific_clade": genome_specific,
                     "clade_size": len(clade_tips),
+                    "nearest_foreign_distance": nearest_foreign,
                 })
     return pairs
 
@@ -426,6 +474,84 @@ def separation_diagnostic(pairs):
     }
 
 
+def find_conversion_candidates(pairs, min_ambiguity, min_distance):
+    """Pairs whose read behaviour and tree position disagree -- gene conversion screen.
+
+    Under plain divergent evolution the two axes are redundant: the longer ago two
+    copies split, the more substitutions separate them, and the sooner a 150 bp read
+    can tell them apart. That is why detection normally falls off as a step function
+    in patristic distance. Gene conversion breaks the redundancy, because it
+    overwrites one copy with the other AFTER the duplication. The tree, built from
+    the whole alignment, still records the ancient split; the converted tract is
+    near-identical, so reads cannot separate them. The pair then lands on the wrong
+    side of the boundary, and that is what this function collects.
+
+    Two independent discordance signatures are reported:
+
+      distance  -- ambiguous despite a patristic distance past the point where reads
+                   should already separate the copies.
+      topology  -- ambiguous while another taxon's gene sits strictly closer to one
+                   of the copies than the copies sit to each other. Two genes that
+                   are near-identical by descent must be each other's closest
+                   relatives; if a foreign gene is nearer, something homogenised
+                   them after they split. The distance comparison matters: bare
+                   non-monophyly inside a near-polytomy is topological noise, not
+                   evidence, so it is not enough to fire this signature.
+
+    This is a screen, not a test. Both signatures are equally consistent with a
+    misassembled duplicate, a misrooted or under-sampled tree, or a badly aligned
+    region. Confirmation needs sequence-level evidence -- a sliding-window identity
+    scan across the pair, or a formal test such as GENECONV -- which is outside what
+    equivalence classes and a topology can support.
+    """
+    candidates = []
+    for pair in pairs:
+        if not pair["detected"] or pair["ambiguity"] is None:
+            continue
+        if pair["ambiguity"] < min_ambiguity:
+            continue
+        by_distance = pair["distance"] >= min_distance
+        foreign = pair.get("nearest_foreign_distance")
+        by_topology = (not pair["genome_specific_clade"]
+                       and foreign is not None
+                       and foreign < pair["distance"])
+        if not (by_distance or by_topology):
+            continue
+        signature = "+".join(
+            [s for s, on in (("distance", by_distance), ("topology", by_topology)) if on]
+        )
+        candidates.append({
+            **pair,
+            "signature": signature,
+            # Ranking aid only: high ambiguity carried far out on the tree. Not a
+            # test statistic and it has no null distribution -- do not threshold it.
+            "discordance": pair["ambiguity"] * pair["distance"],
+        })
+    candidates.sort(key=lambda c: c["discordance"], reverse=True)
+    return candidates
+
+
+def write_conversion_report(candidates, path):
+    columns = ["family", "gene_a", "gene_b", "patristic_distance", "ambiguity",
+               "n_samples_supporting", "genome_specific_clade", "clade_size",
+               "nearest_foreign_distance",
+               "unique_reads_a", "unique_reads_b", "signature", "discordance"]
+    with open(path, "w") as out:
+        out.write("\t".join(columns) + "\n")
+        for c in candidates:
+            foreign = c.get("nearest_foreign_distance")
+            out.write("\t".join([
+                c["family"], c["a"], c["b"],
+                f"{c['distance']:.6f}", f"{c['ambiguity']:.3f}",
+                "" if c["n_samples"] is None else str(c["n_samples"]),
+                str(c["genome_specific_clade"]), str(c["clade_size"]),
+                "" if foreign is None else f"{foreign:.6f}",
+                "" if c["unique_a"] is None else f"{c['unique_a']:.0f}",
+                "" if c["unique_b"] is None else f"{c['unique_b']:.0f}",
+                c["signature"], f"{c['discordance']:.6f}",
+            ]) + "\n")
+
+
 def sweep_cutoffs(pairs, mode, max_distance, cutoffs, gene_costs=None):
     """Sensitivity against the tree-confirmed set at each ambiguity cutoff."""
     positives = [p for p in pairs if expected_positive(p, mode, max_distance)]
@@ -485,10 +611,23 @@ def run_calibration(groups, tree_files, args, stream=sys.stderr):
 
     worst = gene_ambiguity_universe(groups)
     cutoffs = [0.0, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
+    # The decisive cutoff is the lowest ambiguity among tree-confirmed detections,
+    # and it rarely lands on a round grid point. Without it in the table the sweep
+    # brackets the answer but never states it, and a reader picking the nearest
+    # grid row silently drops a confirmed pair.
+    _detected_positive = [p for p in pairs
+                          if expected_positive(p, args.expected_positives,
+                                               args.tree_max_distance)
+                          and p["detected"] and p["ambiguity"] is not None]
+    if _detected_positive:
+        cutoffs = sorted(set(cutoffs)
+                         | {min(p["ambiguity"] for p in _detected_positive)})
     sweep, positives = sweep_cutoffs(pairs, args.expected_positives,
                                      args.tree_max_distance, cutoffs,
                                      gene_costs=list(worst.values()))
     diag = separation_diagnostic(pairs)
+    conversion = find_conversion_candidates(pairs, args.conversion_min_ambiguity,
+                                            args.conversion_min_distance)
 
     if args.tree_report:
         with open(args.tree_report, "w") as out:
@@ -518,10 +657,16 @@ def run_calibration(groups, tree_files, args, stream=sys.stderr):
             out.write("ambiguity_cutoff\ttree_pairs_retained\ttree_pairs_total\t"
                       "sensitivity\tgenes_merged_genomewide\n")
             for row in sweep:
-                out.write(f"{row['cutoff']:.2f}\t{row['tree_pairs_retained']}\t"
+                # 3 dp, not 2: the decisive cutoff is a measured value, and rounding
+                # it up (0.096 -> 0.10) would drop the very pair it was derived from.
+                out.write(f"{row['cutoff']:.3f}\t{row['tree_pairs_retained']}\t"
                           f"{row['tree_pairs_total']}\t{row['sensitivity']:.3f}\t"
                           f"{row.get('genes_merged', '')}\n")
         print(f"cutoff sweep -> {args.calibration_report}", file=stream)
+
+    if args.conversion_report:
+        write_conversion_report(conversion, args.conversion_report)
+        print(f"gene-conversion candidates -> {args.conversion_report}", file=stream)
 
     # ---- console summary
     print("", file=stream)
@@ -550,6 +695,22 @@ def run_calibration(groups, tree_files, args, stream=sys.stderr):
               f"-- any cutoff above this drops a tree-confirmed pair", file=stream)
         n_at = sum(1 for a in worst.values() if a >= floor)
         print(f"a cutoff of {floor:.2f} flags {n_at} gene(s) genome-wide", file=stream)
+
+    if conversion:
+        print("", file=stream)
+        print(f"{len(conversion)} gene-conversion candidate(s) "
+              f"(ambiguity >= {args.conversion_min_ambiguity:g} while the tree says "
+              f"distance >= {args.conversion_min_distance:g} and/or the copies are "
+              f"not sisters):", file=stream)
+        for c in conversion[:10]:
+            print(f"    {c['family']:<22}{c['a']} + {c['b']}  "
+                  f"amb={c['ambiguity']:.3f} d={c['distance']:.4f} "
+                  f"[{c['signature']}]", file=stream)
+        if len(conversion) > 10:
+            print(f"    ... and {len(conversion) - 10} more", file=stream)
+        print("  A screen, not a test: an assembly artefact or an under-sampled tree "
+              "produces the same pattern. Confirm with a sliding-window identity scan "
+              "or GENECONV before calling conversion.", file=stream)
 
     undetected = [p for p in positives if not p["detected"]]
     if undetected:
@@ -610,6 +771,22 @@ def add_tree_arguments(parser, required_group=True):
         "--calibration-report", default=None,
         help="Write the ambiguity-cutoff sweep here.",
     )
+    parser.add_argument(
+        "--conversion-report", default=None,
+        help="Write gene-conversion candidates here: pairs that stay ambiguous to "
+             "the reads despite the tree placing them far apart or non-sister.",
+    )
+    parser.add_argument(
+        "--conversion-min-ambiguity", type=float, default=0.2,
+        help="Minimum read ambiguity for a pair to be screened for conversion "
+             "(default: 0.2).",
+    )
+    parser.add_argument(
+        "--conversion-min-distance", type=float, default=0.05,
+        help="Patristic distance beyond which an ambiguous pair is discordant. The "
+             "default 0.05 sits below the ~0.08 point where 150 bp reads normally "
+             "start separating copies (default: 0.05).",
+    )
     return parser
 
 
@@ -626,11 +803,14 @@ def add_arguments(parser):
 def main(args):
     groups = load_group_table(args.groups)
     print(f"{len(groups)} paralog group(s) loaded from {args.groups}", file=sys.stderr)
-    if not args.tree_report and not args.calibration_report:
+    if not args.tree_report and not args.calibration_report \
+            and not args.conversion_report:
         args.tree_report = "paralog_tree_pairs.tsv"
         args.calibration_report = "paralog_cutoff_calibration.tsv"
-        print("no report paths given; writing paralog_tree_pairs.tsv and "
-              "paralog_cutoff_calibration.tsv", file=sys.stderr)
+        args.conversion_report = "paralog_gene_conversion_candidates.tsv"
+        print("no report paths given; writing paralog_tree_pairs.tsv, "
+              "paralog_cutoff_calibration.tsv and "
+              "paralog_gene_conversion_candidates.tsv", file=sys.stderr)
     result = run_calibration(groups, args.trees, args)
     return 0 if result else 1
 
