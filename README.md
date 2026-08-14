@@ -726,10 +726,17 @@ python SalmonStreamer.py ParalogTreeCheck \
     --groups paralog_groups_all.tsv \
     --trees genetrees/*.rtf \
     --tree-report paralog_tree_pairs.tsv \
-    --calibration-report paralog_cutoff_calibration.tsv
+    --calibration-report paralog_cutoff_calibration.tsv \
+    --conversion-report paralog_gene_conversion_candidates.tsv
 ```
 
 This resolves tree tip labels to gene IDs, classifies every within-genome pair by patristic distance and whether its MRCA is a genome-specific clade, and sweeps the ambiguity cutoff reporting sensitivity against the tree-confirmed duplications. In practice the intuitive-looking `0.9` can retain *none* of them — read the `sensitivity` column rather than picking a round number.
+
+Derive the cutoff from the report rather than reading a value off the grid: the decisive number is the lowest ambiguity among pairs the trees confirm *and* the reads detect, and the sweep includes that exact value as its own row. Re-run this step whenever the trees change, and re-derive the threshold from the new output — a tree edit moves the cutoff, and a threshold left over from the previous round matches neither set of trees.
+
+**Gene-conversion screen.** `--conversion-report` collects pairs where read behaviour and tree position disagree: the reads cannot separate the copies, but the tree places them far apart, or places another taxon's gene closer to one copy than the copies are to each other. Under plain divergent evolution those two axes are redundant, which is why detection normally falls off cleanly with patristic distance; conversion breaks the redundancy by overwriting one copy with the other after the duplication. Tune with `--conversion-min-ambiguity` (default `0.2`) and `--conversion-min-distance` (default `0.05`, below the ~0.08 point where 150 bp reads normally start separating copies).
+
+This is a screen, not a test. A misassembled duplicate, an under-sampled tree, or a badly aligned region produces the same pattern, and the screen only sees genes that appear in the supplied trees. Confirm a candidate with sequence-level evidence — a sliding-window identity scan across the pair, or a formal test such as GENECONV — before calling conversion. An empty report is a real result: it means read ambiguity tracks tree divergence with no outliers in the families you supplied.
 
 **Step 4 — build the merged features.**
 
