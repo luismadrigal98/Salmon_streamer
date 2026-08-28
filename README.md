@@ -740,17 +740,31 @@ This is a screen, not a test. A misassembled duplicate, an under-sampled tree, o
 
 **Step 4 — build the merged features.**
 
+Read the cutoff out of step 3 rather than typing a literal — that is the whole point of
+calibrating. The rule is the weakest pair your trees confirm *and* the reads detect:
+
+```bash
+MIN_AMB=$(awk -F'\t' 'NR>1 && $7=="True" && $8=="True" && $9!="" {
+              if (!n++ || $9+0 < a) a = $9+0
+          } END { if (n) printf "%.3f\n", a; else print "NA" }' paralog_tree_pairs.tsv)
+echo "calibrated ambiguity cutoff: $MIN_AMB"
+```
+
 ```bash
 python SalmonStreamer.py ParalogMerge \
     --groups paralog_groups_all.tsv \
     --txp2gene txp2gene.tsv \
     --quant-dirs quant_dirs/*_quant \
-    --min-ambiguity 0.2 --min-unique-reads 20 \
+    --min-ambiguity "$MIN_AMB" --min-unique-reads 20 \
     -o merged_counts.tsv \
     --out-map paralog_features_map.tsv \
     --out-tx2gene paralog_tx2feature.tsv \
     --out-report paralog_features_report.tsv
 ```
+
+`--min-unique-reads` is *not* tree-derived — it comes from the estimability argument above
+(precision goes as `1/sqrt(unique reads)`, so 20 is roughly a 22% CV) and stays put when the
+trees change.
 
 Merged features are named `PARA_<first gene>_n<k>`. Omit `--quant-dirs`/`--counts` to emit only the feature definition — the map depends on the groups, not on any particular quantification, so one map applies to whichever counts the DE analysis uses.
 
@@ -766,7 +780,7 @@ Groups are *not* a partition — a gene can appear in several called groups — 
 python SalmonStreamer.py ParalogTracks \
     --groups paralog_groups_all.tsv \
     --gff annotation.gff \
-    --min-ambiguity 0.2 --min-samples 20 \
+    --min-ambiguity "$MIN_AMB" --min-samples 20 \
     --prefix paralog_groups_calibrated
 ```
 
