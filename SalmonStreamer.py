@@ -44,6 +44,8 @@ from subprograms.ParalogMerge import main as paralog_merge_main
 from subprograms.ParalogMerge import add_arguments as paralog_merge_arguments
 from subprograms.ParalogTracks import main as paralog_tracks_main
 from subprograms.ParalogTracks import add_arguments as paralog_tracks_arguments
+from subprograms.ParalogTximport import main as paralog_tximport_main
+from subprograms.ParalogTximport import add_arguments as paralog_tximport_arguments
 from subprograms.MakeTxp2Gene import main as make_txp2gene_main
 from subprograms.MakeTxp2Gene import add_arguments as make_txp2gene_arguments
 from src.postprocessing_utilities import process_post_pipeline
@@ -263,6 +265,12 @@ def main():
                                           help='Collapse paralogous genes into single features to make a '
                                                'DE analysis paralog-aware')
     paralog_merge_arguments(paralog_merge_parser)
+
+    # --- Add ParalogTximport Subcommand ---
+    paralog_tximport_parser = subparsers.add_parser('ParalogTximport',
+                                          help='Aggregate Salmon quantifications to paralog-aware '
+                                               'features with tximport (keeps transcript-length offsets)')
+    paralog_tximport_arguments(paralog_tximport_parser)
 
     # --- Add ParalogTracks Subcommand ---
     paralog_tracks_parser = subparsers.add_parser('ParalogTracks',
@@ -634,6 +642,8 @@ def main():
         paralog_tree_check_main(args)
     elif args.command == 'ParalogMerge':
         paralog_merge_main(args)
+    elif args.command == 'ParalogTximport':
+        sys.exit(paralog_tximport_main(args))
     elif args.command == 'ParalogTracks':
         paralog_tracks_main(args)
     elif args.command == 'MakeTxp2Gene':

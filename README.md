@@ -39,6 +39,7 @@ Salmon Streamer provides the following subcommands:
 | **`ParalogGroups`** | **Group genes whose reads map equally well to every copy, from Salmon equivalence classes** |
 | **`ParalogTreeCheck`** | **Ground-truth those groups against Newick gene trees and calibrate the ambiguity cutoff** |
 | **`ParalogMerge`** | **Collapse unresolvable paralogs into single features to make a DE analysis paralog-aware** |
+| **`ParalogTximport`** | **Aggregate Salmon quantifications to paralog-aware features with tximport, keeping transcript-length offsets** |
 | **`ParalogTracks`** | **Write IGV tracks and loci so paralog groups can be checked against the alignments** |
 | `ProcessGenotypes` | Process genotypes from transcript mapping data |
 | `MakePhenotypes` | Generate phenotype files from expression data |
@@ -769,8 +770,23 @@ trees change.
 Merged features are named `PARA_<first gene>_n<k>`. Omit `--quant-dirs`/`--counts` to emit only the feature definition — the map depends on the groups, not on any particular quantification, so one map applies to whichever counts the DE analysis uses.
 
 Two routes downstream:
-- **`--out-tx2gene` + tximport (preferred).** `paralog_tx2feature.tsv` is a drop-in replacement for `tx2gene`; tximport aggregates and also computes the average transcript-length offsets that edgeR/DESeq2 use. Summing counts by hand does not produce those offsets.
-- **`-o merged_counts.tsv`** for a merged matrix directly. `ParalogMerge` verifies read conservation (total in = total out) and stops rather than writing a matrix that fails it.
+- **`ParalogTximport` (preferred)** — step 4b below. Aggregates with tximport, which recomputes the average transcript length of each merged feature. Summing counts by hand cannot produce that, and it is what edgeR/DESeq2 use to correct for composition differences between samples.
+- **`-o merged_counts.tsv`** for a merged matrix directly. `ParalogMerge` verifies read conservation (total in = total out) and stops rather than writing a matrix that fails it. Simpler, and fine when the model does not use length offsets.
+
+**Step 4b — aggregate with tximport (preferred route).**
+
+```bash
+python SalmonStreamer.py ParalogTximport --quant-dirs production_quant/*_quant --tx2feature paralog_tx2feature.tsv --output-dir tximport_out/ --strip-suffix '_quant$'
+```
+
+Writes `paralog_feature_counts.tsv`, `paralog_feature_abundance_tpm.tsv` and `paralog_feature_length.tsv` into `--output-dir`.
+
+`--counts-from-abundance` decides how the length correction is delivered, and it is the only choice that matters here:
+
+- **`lengthScaledTPM` (default)** folds the correction into the counts, so `paralog_feature_counts.tsv` goes straight into `EdgeRDE` — or any count-based DE tool — with no offset. This is what keeps the route inside the pipeline.
+- **`no`** keeps raw counts and leaves the correction to the downstream model, which must then take `paralog_feature_length.tsv` as an offset. More faithful, but only worth it if your consumer supports offsets.
+
+Requires the Bioconductor package `tximport`; install with `R -e 'BiocManager::install("tximport")'`. Sample names default to each `quant.sf`'s containing directory, so `--strip-suffix` (or `--sample-names`) is usually needed to match your metadata.
 
 Groups are *not* a partition — a gene can appear in several called groups — so `ParalogMerge` resolves them to connected components, guaranteeing every gene lands in exactly one feature and nothing is double-counted.
 
