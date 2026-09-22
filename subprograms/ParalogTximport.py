@@ -39,6 +39,7 @@ Requires the R package tximport (Bioconductor).
 import argparse
 import csv
 import os
+import shutil
 import re
 import subprocess
 import sys
@@ -121,13 +122,15 @@ def main(args):
         print(f"ERROR: R script not found at {r_script}", file=sys.stderr)
         sys.exit(1)
 
-    if not os.path.isfile(args.rscript_executable):
+    rscript = shutil.which(os.path.expanduser(args.rscript_executable))
+    if rscript is None:
         print(
-            f"ERROR: Rscript executable not found at: {args.rscript_executable}\n"
-            f"       Specify a different path with --rscript-executable",
+            f"ERROR: Rscript executable not found: {args.rscript_executable}\n"
+            f"       Put Rscript on your PATH or pass --rscript-executable",
             file=sys.stderr
         )
         sys.exit(1)
+    args.rscript_executable = rscript
 
     if not os.path.isfile(args.tx2feature):
         print(f"ERROR: tx2feature map not found: {args.tx2feature}\n"
@@ -229,8 +232,8 @@ def add_arguments(parser):
     )
     parser.add_argument(
         "--rscript-executable",
-        default=os.path.expanduser("~/.conda/envs/PyR/bin/Rscript"),
-        help="Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).",
+        default="Rscript",
+        help="Path to the Rscript executable (default: Rscript on your PATH).",
     )
     return parser
 

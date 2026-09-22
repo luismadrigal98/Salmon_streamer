@@ -12,6 +12,7 @@ In the future it will be extended to run these analysis also per different cross
 
 import os
 import logging
+import shutil
 import subprocess
 import sys
 import time
@@ -35,6 +36,12 @@ def main(args):
 
     # Retrieve the sourcing directory for the R script
     source_dir = os.path.join(os.path.dirname(__file__), '../src/R_src')
+
+    # Resolve Rscript on the submitting node, so the jobs run the same one. If it
+    # is not found here, keep the name as given: a module loaded inside the job may
+    # still provide it.
+    args.rscript_executable = (shutil.which(os.path.expanduser(args.rscript_executable))
+                               or args.rscript_executable)
 
     # Read in the lit of inputs
 

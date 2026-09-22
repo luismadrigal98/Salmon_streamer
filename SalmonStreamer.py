@@ -64,10 +64,10 @@ def main():
     ann_transfer_parser.add_argument('--annotation_gff3', required=True, help='Annotation file in gff3 format')
     ann_transfer_parser.add_argument('--output', required=True, help='Output file for the annotation transfer. This will be a gff3 file')
     ann_transfer_parser.add_argument('--intermediate_dir', required=True, help='Intermediate directory for the annotation transfer')
-    ann_transfer_parser.add_argument('--liftoff_path', required=False, default='~/.conda/envs/salmon/bin/liftoff',
-                                        help='Path to the liftoff executable')
-    ann_transfer_parser.add_argument('--minimap_path', required=False, default='~/.conda/envs/salmon/bin/minimap2',
-                                        help='Path to the minimap2 executable')
+    ann_transfer_parser.add_argument('--liftoff_path', required=False, default='liftoff',
+                                        help='Path to the liftoff executable (default: liftoff on your PATH)')
+    ann_transfer_parser.add_argument('--minimap_path', required=False, default='minimap2',
+                                        help='Path to the minimap2 executable (default: minimap2 on your PATH)')
     #ann_transfer_parser.add_argument('--mm2_options', default='="-a --eqx -N 50 -p 0.5"', help='Options for minimap2')  # THIS IS BROKEN IN LIFTOFF. THERE IS NO WAY OF PARSING THE OPTIONS
 
     # Transcriptome builder parser
@@ -172,7 +172,7 @@ def main():
     pca_qc_parser.add_argument('--genes-as-rows', action='store_true', help="If set, transpose final filtered data to have genes as rows.")
     pca_qc_parser.add_argument('--output-dir', required=True, help="Directory to save output plots and the filtered data file.")
     pca_qc_parser.add_argument('--pc-to-retain', type=int, default=5, help="Number of principal components to retain for analysis (default: 5).")
-    pca_qc_parser.add_argument('--rscript-executable', default='~/.conda/envs/PyR/bin/Rscript', help="Path to the Rscript executable (default: Rscript).")
+    pca_qc_parser.add_argument('--rscript-executable', default='Rscript', help="Path to the Rscript executable (default: Rscript on your PATH).")
 
     # Create the voom subcommand parser (from voom_from_salmon.py)
     voom_parser = subparsers.add_parser('Voom', help='Preprocess Salmon output for voom analysis')
@@ -204,8 +204,8 @@ def main():
                             help="Cross type for R/qtl (default: f2)")
     
     # SLURM job settings
-    qtl_parser.add_argument('--rscript-executable', default='~/.conda/envs/PyR/bin/Rscript',
-                            help="Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript)")
+    qtl_parser.add_argument('--rscript-executable', default='Rscript',
+                            help="Path to the Rscript executable (default: Rscript on your PATH)")
     qtl_parser.add_argument('--partition', default='sixhour,eeb,kucg,kelly',
                             help="SLURM partition to use (default: sixhour,eeb,kucg,kelly)")
     qtl_parser.add_argument('--nodes', type=int, default=1,
@@ -467,8 +467,8 @@ def main():
     )
     edger_de_parser.add_argument(
         '--rscript-executable',
-        default=os.path.expanduser('~/.conda/envs/PyR/bin/Rscript'),
-        help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
+        default='Rscript',
+        help='Path to the Rscript executable (default: Rscript on your PATH).'
     )
 
     # --- Add EdgeRDEFromNormalized Subcommand ---
@@ -528,8 +528,8 @@ def main():
     )
     edger_de_norm_parser.add_argument(
         '--rscript-executable',
-        default=os.path.expanduser('~/.conda/envs/PyR/bin/Rscript'),
-        help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
+        default='Rscript',
+        help='Path to the Rscript executable (default: Rscript on your PATH).'
     )
 
     # --- Add ASEIntegrate Subcommand ---
@@ -587,8 +587,8 @@ def main():
     )
     ase_integrate_parser.add_argument(
         '--rscript-executable',
-        default=os.path.expanduser('~/.conda/envs/PyR/bin/Rscript'),
-        help='Path to the Rscript executable (default: ~/.conda/envs/PyR/bin/Rscript).'
+        default='Rscript',
+        help='Path to the Rscript executable (default: Rscript on your PATH).'
     )
 
     # Parse arguments

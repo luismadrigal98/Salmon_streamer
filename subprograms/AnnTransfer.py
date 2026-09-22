@@ -14,6 +14,7 @@ import logging
 import sys
 import subprocess
 import os
+import shutil
 
 ## Setting up logging (fancy style)
 logging.basicConfig(
@@ -61,9 +62,15 @@ def main(args):
     output = args.output
     intermediate_dir = args.intermediate_dir
     
-    # Executables - Expand user paths here
-    liftoff_path = os.path.expanduser(args.liftoff_path)
-    minimap_path = os.path.expanduser(args.minimap_path)
+    # Executables - accept either a path or a command name on PATH
+    liftoff_path = shutil.which(os.path.expanduser(args.liftoff_path))
+    minimap_path = shutil.which(os.path.expanduser(args.minimap_path))
+    for flag, given, resolved in (('--liftoff_path', args.liftoff_path, liftoff_path),
+                                  ('--minimap_path', args.minimap_path, minimap_path)):
+        if resolved is None:
+            logging.error(f"Executable not found: {given}. "
+                          f"Activate the environment that provides it or pass {flag}.")
+            sys.exit(1)
     # mm2_options = args.mm2_options # This should contain the string like "-a --eqx ..."
 
     output_dir = os.path.dirname(output)
