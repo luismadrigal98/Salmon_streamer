@@ -152,7 +152,12 @@ def main():
                         help='Time limit for SLURM jobs', default='05:59:00')
     misc_group.add_argument('--module_load_cmd', required=False, 
                         help='Module load command for conda (use "none" to skip)', default='module load conda')
-    
+    misc_group.add_argument('--submit_retry_interval', type=int, required=False,
+                        help='Seconds between sbatch attempts when the cluster job submission limit is reached (default: 60)', default=60)
+    misc_group.add_argument('--submit_max_wait', type=int, required=False,
+                        help='Maximum total seconds to wait for free job submission slots before giving up on the remaining samples; '
+                             'their scripts are listed in <temporal_directory>/Jobs/unsubmitted_jobs.txt (default: 3600)', default=3600)
+
     # Create the process subcommand parser (from Salmon_output_processor.py)
     process_parser = subparsers.add_parser('ProcessSalmonOut', help='Process Salmon output into a combined table')
     process_parser.add_argument('-o', '--output', required=True, help='Directory with the output of the Salmon pipeline')

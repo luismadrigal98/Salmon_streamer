@@ -956,6 +956,14 @@ python SalmonStreamer.py RunQTL \
     --max-concurrent-jobs 1000
 ```
 
+`RunSalmonQuant` submits one SLURM job per sample. If your cluster caps how many jobs one user can have queued (sbatch fails with `QOSMaxSubmitJobPerUserLimit` or a similar `MaxSubmitJob` error), the pipeline waits and retries instead of dropping the sample. It retries every `--submit_retry_interval` seconds (default: 60) until your earlier jobs finish or `--submit_max_wait` seconds of total waiting have passed (default: 3600). Samples still unsubmitted at that point are listed in `<temporal_directory>/Jobs/unsubmitted_jobs.txt`, the run exits with an error, and `--clean` is skipped so the job scripts are kept. Submit them later with:
+
+```bash
+while read -r job; do sbatch "$job"; done < TEMP/Jobs/unsubmitted_jobs.txt
+```
+
+If you launch `RunSalmonQuant` itself as a SLURM job, give it enough `--time` to cover `--submit_max_wait` on top of building the index.
+
 #### Quality Control Parameters
 
 PCA-based quality control with customizable parameters:

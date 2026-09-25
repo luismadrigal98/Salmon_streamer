@@ -10,6 +10,7 @@ Set of functions to preprocess the input files before using Salmon
 import subprocess
 import logging
 import os
+import time
 import fileinput
 from Bio import SeqIO
 
@@ -378,3 +379,55 @@ def master_script_generator(file, w_dir, job_dir, output_dir,
             out.write(f" -r {file} -o {os.path.join(output_dir, out_name)} \n")
 
     return job_script_path
+
+def submit_slurm_job(job_script, retry_interval=60, max_wait=3600):
+    """
+    Submit a job script with sbatch, waiting and retrying while the cluster's
+    per-user (or per-account) job submission limit is reached.
+
+    Only rejections caused by a MaxSubmitJob* limit are retried: those clear up
+    by themselves as queued jobs finish. Any other sbatch error (bad partition,
+    time or memory request above the QOS maximum, ...) would fail again, so it
+    is reported immediately.
+
+    Parameters
+    ----------
+    job_script : str
+        Path to the job script to submit
+    retry_interval : int, optional
+        Seconds to wait between submission attempts (default: 60)
+    max_wait : int, optional
+        Maximum number of seconds to spend waiting for a free submission slot.
+        With 0 the job is submitted once, without retrying (default: 3600)
+
+    Returns
+    -------
+    tuple
+        (job_id, seconds_waited). job_id is None if the job was not submitted.
+    """
+    waited = 0
+
+    while True:
+        result = subprocess.run(['sbatch', job_script], capture_output=True, text=True)
+
+        if result.returncode == 0:
+            job_id = result.stdout.strip().split()[-1] if result.stdout.strip() else 'unknown'
+            logging.info(f"Submitted job {job_id} from {job_script}")
+            return job_id, waited
+
+        error = result.stderr.strip()
+
+        # Slurm names these limits AssocMaxSubmitJobLimit, QOSMaxSubmitJobPerUserLimit, ...
+        if 'MaxSubmitJob' not in error:
+            logging.error(f"sbatch failed for {job_script}: {error}")
+            return None, waited
+
+        if waited + retry_interval > max_wait:
+            logging.error(f"Job submission limit still reached after waiting {waited}s; "
+                          f"{job_script} was not submitted")
+            return None, waited
+
+        logging.warning(f"Job submission limit reached; retrying {job_script} in {retry_interval}s "
+                        f"({waited}s waited so far, giving up after {max_wait}s)")
+        time.sleep(retry_interval)
+        waited += retry_interval

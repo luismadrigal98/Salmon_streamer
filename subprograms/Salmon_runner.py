@@ -160,6 +160,8 @@ def main(args):
     library_type = args.library_type
     r1_pattern = args.r1_pattern
     r2_pattern = args.r2_pattern
+    submit_retry_interval = args.submit_retry_interval
+    submit_max_wait = args.submit_max_wait
 
     # Check if the input directory exists
     if not os.path.isdir(input_dir):
@@ -290,6 +292,11 @@ def main(args):
     if not os.path.isdir(job_dir):
         os.mkdir(job_dir)
 
+    # Jobs rejected by sbatch, and the time left to wait for free submission slots
+    unsubmitted_jobs = []
+    submitted_count = 0
+    wait_budget = submit_max_wait
+
     # Handle paired-end vs single-end mode
     if library_type == 'PE':
         logging.info('Processing paired-end reads...')
@@ -327,9 +334,13 @@ def main(args):
                                         quant_options, email, partition, conda_env, time_limit, module_load_cmd,
                                         library_type='PE', r2_file=r2_path)
             
-            cmd_launcher = f"sbatch {job}"
-            logging.info(f"Submitting paired-end job: {cmd_launcher}")
-            subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
+            logging.info(f"Submitting paired-end job: {job}")
+            job_id, waited = submit_slurm_job(job, submit_retry_interval, wait_budget)
+            wait_budget -= waited
+            if job_id is None:
+                unsubmitted_jobs.append(job)
+            else:
+                submitted_count += 1
     
     else:  # Single-end mode (original logic)
         logging.info('Processing single-end reads...')
@@ -347,9 +358,26 @@ def main(args):
                                         os.path.join(temporal_directory, 'salmon_index'),
                                         quant_options, email, partition, conda_env, time_limit, module_load_cmd)
             
-            cmd_launcher = f"sbatch {job}"
-            logging.info(f"Submitting job: {cmd_launcher}")
-            subprocess.run(cmd_launcher, shell=True, executable='/bin/bash')
+            logging.info(f"Submitting job: {job}")
+            job_id, waited = submit_slurm_job(job, submit_retry_interval, wait_budget)
+            wait_budget -= waited
+            if job_id is None:
+                unsubmitted_jobs.append(job)
+            else:
+                submitted_count += 1
+
+    logging.info(f"Submitted {submitted_count} of {submitted_count + len(unsubmitted_jobs)} quantification jobs")
+
+    if unsubmitted_jobs:
+        unsubmitted_list = os.path.join(job_dir, 'unsubmitted_jobs.txt')
+        with open(unsubmitted_list, 'w') as out:
+            out.write('\n'.join(unsubmitted_jobs) + '\n')
+        logging.error(f"{len(unsubmitted_jobs)} jobs were not submitted. Their scripts are listed in {unsubmitted_list}")
+        logging.error(f"Once you have free job slots, submit them with: "
+                      f"while read -r job; do sbatch \"$job\"; done < {unsubmitted_list}")
+        if clean:
+            logging.warning('Skipping --clean so the unsubmitted job scripts are kept')
+        sys.exit(1)
 
     # Cleaning all the files and temporal directories
     if clean:
