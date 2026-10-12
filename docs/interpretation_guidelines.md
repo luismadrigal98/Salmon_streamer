@@ -543,4 +543,3 @@ logFC = 2.0, ad = 1.3, ed = -0.7
 - [Input Format Specification](./input_format_specification.md)
 - [Output Files Reference](./output_files_reference.md)
 - [ASE + DE Integration Workflow](./ase_de_integration_workflow.md)
-- [ASEIntegrate & EdgeRDE Audit Report](../AUDIT_ASEIntegrate_EdgeRDE.md)

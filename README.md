@@ -234,7 +234,9 @@ python SalmonStreamer.py PCA_QC \
 
 ### Option B: Dual-Genome Workflow
 
-Use this when you have **two genomes** (reference + alternative) and want allele-specific expression analysis (e.g., hybrid crosses).
+Use this when you have **two genomes** (reference + alternative) and want allele-specific expression by competitive mapping: Salmon quantifies reads against a combined transcriptome built from both genomes (e.g., hybrid crosses).
+
+> **The two-genome requirement applies to this quantification route only.** It is what Salmon competitive mapping needs, not a requirement of allele-specific analysis in general. With a single reference genome, ASE can be obtained from F1 hybrid samples and a VCF covering the parents and the F1s, and `ASEIntegrate` only joins tables by gene ID. See [Allele-Specific Expression + DE Integration](#allele-specific-expression--de-integration-with-aseintegrate).
 
 ### 1. Prepare Genomes and Transcriptome
 
@@ -804,6 +806,8 @@ Writes `<prefix>.bed` (BED score = ambiguity × 1000, so strong groups shade dar
 
 **Interpreting a merged feature.** A merged feature is not a failed gene. The *sum* is often better measured than a typical single gene because it pools more reads — you lose which copy, not how much. Report the result at the feature level; the individual copy's expression is not separately measurable. Genes left unmerged kept enough unique reads to stand alone and can be read directly, though a gene sharing a substantial read fraction still deserves the caveat in the text.
 
+**Merged features and ASE + DE integration.** `ASEIntegrate` joins DE results to a per-gene ASE table by gene ID. A gene folded into a `PARA_*` feature has no DE row of its own — the row belongs to the feature — and a feature ID matches no gene in the ASE table, so those rows drop out of the ASE + DE join without a warning. This follows from the point above: the copy's own expression is not separately measurable, so there is no per-gene DE value to pair with its ASE. Genes left unmerged keep their own ID and join as usual. To find which feature a gene went into, look it up in `paralog_features_map.tsv` (the `--out-map` table; columns `gene`, `feature`, `n_genes_in_feature`, `merged`).
+
 #### Allele-Specific Expression + DE Integration with ASEIntegrate
 
 **NEW**: Integrate differential expression with allele-specific expression to classify regulatory mechanisms (cis vs. trans).
@@ -817,6 +821,22 @@ ASEIntegrate combines DE results with per-gene allele bias to categorize genes i
 
 This analysis is essential for understanding the evolutionary basis of expression differences in hybrid crosses.
 
+**`ASEIntegrate` does not compute ASE.** It consumes a finished per-gene ASE table (`--ase-counts-file`) and joins it to the `*_DE_results.tsv` files from EdgeRDE by gene ID. It never reads a genome, so it needs neither a second reference nor the [dual-genome quantification route](#option-b-dual-genome-workflow). What the analysis does need is F1 hybrid samples and SNPs that distinguish the parental alleles, and the allele counting has to be done beforehand with a separate tool.
+
+[ASErtain](https://github.com/luismadrigal98/ASErtain) is the single-reference way to obtain ASE: it works from one reference genome, a VCF covering the parents and the F1s, and the F1 BAM files. Its `*.gene_ase.tsv` is **not yet in the `ASEIntegrate` input format** (it has no `snp_count`, `bias_ratio`, `predominant_bias` or `<label>_ratio` columns), so either reshape it into those columns or do the cis/trans join in ASErtain itself, pointing `asertain contrast` at the EdgeRDE table:
+
+```bash
+asertain contrast \
+    --gene-ase runs/study.gene_ase.tsv \
+    --parental-de DE_results/Parent1_vs_Parent2_DE_results.tsv \
+    --de-gene-col TranscriptID \
+    --de-log2-col logFC \
+    --de-padj-col FDR \
+    --out runs/study
+```
+
+See [Step 3 of the workflow guide](docs/ase_de_integration_workflow.md#step-3-prepare-ase-counts-file) for the column mapping and for the fold-change orientation and gene-ID caveats of this route.
+
 **Basic analysis** (cis/trans categorization):
 ```bash
 python SalmonStreamer.py ASEIntegrate \
@@ -828,7 +848,7 @@ python SalmonStreamer.py ASEIntegrate \
     --parent2-label parent2
 ```
 
-**Advanced analysis** (estimate cis and trans effect sizes using Ad/Ed framework):
+**Advanced analysis** (adds the Ad/Ed classification: allele deviation vs. expression deviation):
 ```bash
 python SalmonStreamer.py ASEIntegrate \
     --de-results-dir DE_results/ \
@@ -855,24 +875,28 @@ python SalmonStreamer.py ASEIntegrate \
 - `--hybrid-group`, `--parent1-group`, `--parent2-group`: Group labels in metadata for advanced analysis
 
 **Output files**:
-- `{comparison}_with_ASE.tsv`: Merged DE + ASE with gene categories
-- `{comparison}_ASE_category_summary.tsv`: Gene counts per category
-- `{comparison}_ASE_vs_DE.pdf`: Scatter plot (logFC vs. allele bias)
-- `cis_regulatory_candidates_all.tsv`: All cis-regulated genes across comparisons
+- `{comparison}_with_ASE.tsv`: Merged DE + ASE; the category is in the `ase_de_category` column
+- `{comparison}_ASE_category_summary.tsv`: One row per category (`ase_de_category`, `n_genes`, `avg_logFC`, `avg_bias_ratio`)
+- `{comparison}_ASE_vs_DE.pdf` / `.png`: Scatter plot (logFC vs. parent 1 allele ratio)
+- `cis_regulatory_candidates_all.tsv`: All genes labelled `cis`, across comparisons
 - Advanced mode also produces:
-  - `ase_vs_de_ad_ed_data.tsv`: Cis and trans effect estimates (Ad/Ed framework)
-  - `regulatory_divergence_regressions.pdf`: Effect size visualization
+  - `ase_vs_de_ad_ed_data.tsv`: Per-gene `Ad` (allele deviation), `Ed` (expression deviation), `position_ratio` and the `Regulation` class
+  - `regulatory_divergence_regressions.pdf` / `.png`: `Ad` vs. `Ed`, one regression line per class
 
-**Gene category interpretation**:
+`Ad` and `Ed` are deviations on a ratio scale, not log fold changes; they do not sum to `logFC`. Definitions are in the [workflow guide](docs/ase_de_integration_workflow.md#advanced-analysis-aded-classification).
+
+**Gene category interpretation** (values of `ase_de_category`):
 | Category | DE? | Allele Bias? | Meaning |
 |----------|-----|--------------|---------|
-| cis | Yes | Yes | Regulatory mutations in this gene |
-| trans | Yes | No | Trans factors (e.g., TF) regulate expression |
+| cis | Yes | Yes (same direction) | Regulatory mutations in this gene |
+| trans_only | Yes | No | Trans factors (e.g., TF) regulate expression |
 | trans_compensatory | Yes | Yes (opposite) | Trans factors override cis effects |
 | compensatory | No | Yes | Cis differences masked by trans |
 | no_divergence | No | No | No regulatory divergence |
 
-**Example workflow** (Pepper hybrid cross):
+**Which comparisons to read.** `ASEIntegrate` classifies every `*_DE_results.tsv` in `--de-results-dir`, and its rule assumes that a positive `logFC` means higher expression in parent 1. EdgeRDE writes all pairwise comparisons, names each `A_vs_B` with the groups in alphabetical order, and reports `logFC` as `A` minus `B`. So the categories are meaningful only for the parent-vs-parent file, and only when parent 1's group is named first; when parent 2's is, `cis` and `trans_compensatory` come out exchanged. The parent-vs-F1 files get category labels too, but they should not be reported as cis/trans results. Nothing checks or warns about this at present, and the behaviour is under review. Details are in the [workflow guide](docs/ase_de_integration_workflow.md#which-comparison-files-to-read).
+
+**Example workflow** (illustrative names, Pepper hybrid cross):
 ```bash
 # Step 1: Run EdgeRDE on expression counts
 python SalmonStreamer.py EdgeRDE \
@@ -901,7 +925,6 @@ python SalmonStreamer.py ASEIntegrate \
 - [Interpretation guidelines](docs/interpretation_guidelines.md)
 - [EdgeRDE example](examples/EdgeRDE_example_arabidopsis.md)
 - [ASE+DE example](examples/ASE_DE_example_pepper.md)
-- [Audit report](AUDIT_ASEIntegrate_EdgeRDE.md)
 
 #### Genotype Processing Pipeline
 

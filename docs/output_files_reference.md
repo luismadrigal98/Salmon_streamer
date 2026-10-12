@@ -645,4 +645,3 @@ This prevents accidentally overwriting results.
 - [ASE + DE Integration Workflow](./ase_de_integration_workflow.md)
 - [Input Format Specification](./input_format_specification.md)
 - [Interpretation Guidelines](./interpretation_guidelines.md)
-- [ASEIntegrate & EdgeRDE Audit Report](../AUDIT_ASEIntegrate_EdgeRDE.md)

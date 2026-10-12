@@ -4,9 +4,10 @@
 ASEIntegrate — Allele-Specific Expression + Differential Expression Integration
 SalmonStreamer Pipeline Module
 
-Wraps src/R_src/ase_de_integrate.R.  Takes the DE results produced by
-EdgeRDE and per-gene ASE read counts produced by the EDGE_Penstemon
-ase_read_counter.py script, then:
+Wraps src/R_src/ase_de_integrate.R.  This subcommand does NOT compute ASE and
+never reads a genome: it takes the DE results produced by EdgeRDE and an
+already computed per-gene ASE table (--ase-counts-file), joins the two by
+gene ID, then:
 
   1. (Always) Simple categorisation of every gene with both DE and ASE data:
        cis, trans_compensatory, trans_only, compensatory, no_divergence
@@ -26,6 +27,16 @@ ASE counts file format (--ase-counts-file, tab-separated):
     <p2>_ratio        Fraction of reads from parent 2 allele.
 
   This format matches the output of ase_read_counter.py from EDGE_Penstemon.
+
+Obtaining the ASE table:
+  The requirement is F1 hybrid samples plus SNPs that distinguish the parental
+  alleles, not a second reference genome.  ASErtain computes ASE from a single
+  reference and a VCF covering the parents and the F1s, but its
+  <prefix>.gene_ase.tsv is NOT yet in the format above (no snp_count,
+  bias_ratio, predominant_bias or <label>_ratio columns).  Either reshape it
+  into those columns, or do the cis/trans join in ASErtain itself by passing
+  the EdgeRDE table to `asertain contrast --parental-de` with
+    --de-gene-col TranscriptID --de-log2-col logFC --de-padj-col FDR
 
 @Author: Luis Javier Madrigal-Roca
 @Date:   2026-04-30
