@@ -428,13 +428,22 @@ def annotate_detection(pairs, groups):
         if shared:
             best = max(shared, key=lambda g: g["n_samples"])
             pair["detected"] = True
+            # `ambiguity` is the LESS ambiguous of the two members: both copies
+            # must share reads for the pair to count as unresolvable. It is the
+            # statistic ParalogGroups and ParalogTracks threshold. ParalogMerge's
+            # default policy thresholds the MORE ambiguous member instead (one
+            # copy that cannot stand alone is enough to merge), so that value is
+            # carried too; calibrate against whichever the merge will use.
             pair["ambiguity"] = min(best["ambiguity"][pair["a"]],
                                     best["ambiguity"][pair["b"]])
+            pair["ambiguity_most"] = max(best["ambiguity"][pair["a"]],
+                                         best["ambiguity"][pair["b"]])
             pair["n_samples"] = best["n_samples"]
             pair["unique_a"] = best["unique"].get(pair["a"])
             pair["unique_b"] = best["unique"].get(pair["b"])
         else:
-            pair.update({"detected": False, "ambiguity": None, "n_samples": None,
+            pair.update({"detected": False, "ambiguity": None,
+                         "ambiguity_most": None, "n_samples": None,
                          "unique_a": None, "unique_b": None})
     return pairs
 
@@ -500,7 +509,10 @@ def find_conversion_candidates(pairs, min_ambiguity, min_distance):
 
     This is a screen, not a test. Both signatures are equally consistent with a
     misassembled duplicate, a misrooted or under-sampled tree, or a badly aligned
-    region. Confirmation needs sequence-level evidence -- a sliding-window identity
+    region — and, most commonly of all, with ordinary rate heterogeneity along the
+    gene: a conserved domain kept near-identical by purifying selection yields
+    ambiguous reads in an old pair with no conversion at all. Confirmation needs
+    sequence-level evidence -- a sliding-window identity
     scan across the pair, or a formal test such as GENECONV -- which is outside what
     equivalence classes and a topology can support.
     """
@@ -634,7 +646,10 @@ def run_calibration(groups, tree_files, args, stream=sys.stderr):
             columns = ["family", "gene_a", "gene_b", "patristic_distance",
                        "genome_specific_clade", "clade_size", "expected_positive",
                        "detected", "ambiguity", "n_samples_supporting",
-                       "unique_reads_a", "unique_reads_b"]
+                       "unique_reads_a", "unique_reads_b",
+                       # Appended last so scripts reading the earlier columns by
+                       # position keep working.
+                       "ambiguity_most_member"]
             out.write("\t".join(columns) + "\n")
             for pair in sorted(pairs, key=lambda p: p["distance"]):
                 out.write("\t".join([
@@ -649,6 +664,8 @@ def run_calibration(groups, tree_files, args, stream=sys.stderr):
                     "" if pair["n_samples"] is None else str(pair["n_samples"]),
                     "" if pair["unique_a"] is None else f"{pair['unique_a']:.0f}",
                     "" if pair["unique_b"] is None else f"{pair['unique_b']:.0f}",
+                    "" if pair.get("ambiguity_most") is None
+                    else f"{pair['ambiguity_most']:.3f}",
                 ]) + "\n")
         print(f"per-pair tree comparison -> {args.tree_report}", file=stream)
 

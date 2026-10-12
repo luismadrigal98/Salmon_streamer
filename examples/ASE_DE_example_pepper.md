@@ -219,7 +219,7 @@ Upregulated in ChiliPepper: 1,107
 Comparison: BellPepper_vs_ChiliPepper
 Total DE genes: 2,341
 ├─ cis: 234 (10.0%)
-├─ trans: 156 (6.7%)
+├─ trans_only: 156 (6.7%)
 ├─ trans_compensatory: 89 (3.8%)
 ├─ compensatory: 45 (1.9%)
 └─ no_divergence: 1,817 (77.6%)
@@ -243,20 +243,21 @@ Caper_00007 -1.45   0.0003  10          0.80        ChiliPepper
 
 ### From ASEIntegrate (Advanced):
 
-**Ad/Ed classification** (subset of `ase_vs_de_ad_ed_data.tsv`):
+**Cis/trans classes** (subset of `ase_vs_de_ad_ed_data.tsv`, illustrative values):
 ```
-gene_id     logFC   ad_est  ed_est  regulatory_class
-Caper_00001 1.23    1.1     0.1     Cis_dominant
-Caper_00002 0.89    0.2     0.7     Trans_dominant
-Caper_00003 1.5     0.9     0.6     Cis_trans_reinforce
-Caper_00007 -1.45   1.2     -2.4    Cis_trans_opposing
+gene_id     cis_log2  parental_log2  trans_log2  Ad     Ed     Regulation
+Caper_00001 1.20      1.23           0.03        -0.20  -0.02  Cis-only
+Caper_00002 0.05      1.60           1.55        -0.01  -0.35  Trans-only
+Caper_00003 0.90      2.10           1.20        -0.15  -0.10  Cis + Trans (Reinforcing)
+Caper_00007 1.20      -1.45          -2.65       -0.20  0.30   Cis x Trans (Opposing)
 ```
 
 **Interpretation**:
-- `Caper_00001`: Mostly cis (1.1 vs 0.1)
-- `Caper_00002`: Mostly trans (0.2 vs 0.7)
-- `Caper_00003`: Both cis and trans working together (same direction)
-- `Caper_00007`: Cis increases expression, trans decreases (opposing)
+- `Caper_00001`: the allelic ratio accounts for the whole parental difference (cis)
+- `Caper_00002`: parents differ but the F1 alleles are balanced (trans)
+- `Caper_00003`: cis and trans push the same way
+- `Caper_00007`: the BellPepper allele is favoured in the F1 although ChiliPepper expresses more; cis and trans oppose
+- `Ed` describes dominance (where the F1's total expression sits between the parents), not the trans effect
 
 ---
 

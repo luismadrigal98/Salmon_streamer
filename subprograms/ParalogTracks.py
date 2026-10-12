@@ -72,16 +72,22 @@ def load_gene_coords(gff_path):
     return coords
 
 
-def select_groups(rows, min_ambiguity, min_samples):
+def select_groups(rows, min_ambiguity, min_samples, member="least"):
     """Filter the group table, most-shared-reads first.
 
     Ordering by shared reads is what makes the group numbering meaningful: grp001 is
     the group carrying the most ambiguous signal, so scanning the loci file top-down
     walks the groups in descending order of how much they actually matter.
+
+    `member` picks which member's ambiguity the cutoff applies to: "least" (every
+    member shares at least that fraction) or "most" (some member does). The second
+    is what ParalogMerge's default policy thresholds, so use it to draw the groups
+    a merge at the same cutoff considers.
     """
+    column = "max_member_ambiguity" if member == "most" else "min_member_ambiguity"
     selected = [
         row for row in rows
-        if float(row["min_member_ambiguity"]) >= min_ambiguity
+        if float(row[column]) >= min_ambiguity
         and int(row["n_samples_supporting"]) >= min_samples
     ]
     selected.sort(key=lambda row: -float(row["shared_reads"]))
@@ -145,6 +151,14 @@ def add_arguments(parser):
              "(default: paralog_groups_tracks).",
     )
     parser.add_argument(
+        "--ambiguity-member", choices=["least", "most"], default="least",
+        help="Which member of a group --min-ambiguity applies to. 'least' "
+             "(default): the least ambiguous member must reach the cutoff, as in "
+             "ParalogGroups. 'most': the most ambiguous member must, which is what "
+             "ParalogMerge thresholds by default -- use it to see the groups a "
+             "merge at the same cutoff considers.",
+    )
+    parser.add_argument(
         "--min-ambiguity", type=float, default=0.0,
         help="Keep only groups whose least-ambiguous member has at least this "
              "fraction of its reads shared (default: 0, draw everything in the "
@@ -177,7 +191,8 @@ def main(args):
             return 1
         rows = list(reader)
 
-    selected = select_groups(rows, args.min_ambiguity, args.min_samples)
+    selected = select_groups(rows, args.min_ambiguity, args.min_samples,
+                             getattr(args, "ambiguity_member", "least"))
     if not selected:
         print(
             f"warning: no groups passed --min-ambiguity {args.min_ambiguity} / "

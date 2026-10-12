@@ -11,32 +11,46 @@ gene ID, then:
 
   1. (Always) Simple categorisation of every gene with both DE and ASE data:
        cis, trans_compensatory, trans_only, compensatory, no_divergence
+     Only the parent 1 versus parent 2 comparison is classified; cis/trans is
+     not defined for parent-versus-F1 or any other contrast, and those DE
+     files are skipped. The fold change is re-oriented so that positive always
+     means "higher in parent 1": EdgeRDE writes <A>_vs_<B> with logFC = A - B
+     and A, B in alphabetical order, so the raw sign depends on group names.
+     Name the comparison with --parent1-group / --parent2-group; without them
+     it is inferred from the labels appearing in the group names.
 
-  2. (Optional) Advanced Ad/Ed regulatory classification (Wittkopp et al.)
-     when expression matrix + metadata + hybrid/parent group labels are given:
-       Cis + Trans (Reinforcing), Cis x Trans (Opposing), Trans-only, Ambiguous
+  2. (Optional) Cis/trans classification using the parents' and the F1's
+     expression, when expression matrix + metadata + hybrid/parent group labels
+     are given. Standard decomposition: cis = log2 F1 allelic ratio, trans =
+     log2 parental ratio - cis. Classes:
+       Cis-only, Trans-only, Cis + Trans (Reinforcing), Cis x Trans (Opposing),
+       Compensatory, Conserved, Ambiguous
+     Also reports Ad (allelic deviation) and Ed (where the F1's total expression
+     sits between the parents). Ed measures dominance, not the trans effect,
+     and is computed only for genes whose parents are differentially expressed.
+     Descriptive thresholds, no test of the trans component.
 
-ASE counts file format (--ase-counts-file, tab-separated):
-  REQUIRED COLUMNS:
-    gene_id           Gene identifier.
-    snp_count         Number of diagnostic SNPs in the gene.
-    bias_ratio        Fraction of SNPs showing allelic bias.
-    predominant_bias  'parent1_label' or 'parent2_label' (see --parent1-label).
-    <p1>_ratio        Fraction of reads from parent 1 allele (column name is
-                      <--parent1-label>_ratio, e.g. "barbatus_ratio").
-    <p2>_ratio        Fraction of reads from parent 2 allele.
+ASE table (--ase-counts-file, tab-separated), either of:
 
-  This format matches the output of ase_read_counter.py from EDGE_Penstemon.
+  (a) An ASErtain <prefix>.gene_ase.tsv, read as it is. A gene counts as
+      allelically biased when ASErtain called it (ase_call), with ASErtain's
+      direction and mean_<label>_ratio. --parent1-label / --parent2-label must
+      be the lineage labels from the ASErtain config. Preferred: the bias is a
+      replicate-aware test.
 
-Obtaining the ASE table:
-  The requirement is F1 hybrid samples plus SNPs that distinguish the parental
-  alleles, not a second reference genome.  ASErtain computes ASE from a single
-  reference and a VCF covering the parents and the F1s, but its
-  <prefix>.gene_ase.tsv is NOT yet in the format above (no snp_count,
-  bias_ratio, predominant_bias or <label>_ratio columns).  Either reshape it
-  into those columns, or do the cis/trans join in ASErtain itself by passing
-  the EdgeRDE table to `asertain contrast --parental-de` with
-    --de-gene-col TranscriptID --de-log2-col logFC --de-padj-col FDR
+  (b) The legacy summary format produced by ase_read_counter.py (EDGE_Penstemon):
+        gene_id           Gene identifier.
+        snp_count         Number of diagnostic SNPs in the gene.
+        bias_ratio        Fraction of SNPs showing allelic bias.
+        predominant_bias  'parent1_label' or 'parent2_label' (see --parent1-label).
+        <p1>_ratio        Fraction of reads from parent 1 allele (column name is
+                          <--parent1-label>_ratio, e.g. "barbatus_ratio").
+        <p2>_ratio        Fraction of reads from parent 2 allele.
+      Here "biased" means bias_ratio > 0.5 — a majority vote over SNPs, not a
+      statistical test, and blind to depth and replication.
+
+Either way the requirement is F1 hybrid samples plus SNPs that distinguish the
+parental alleles, not a second reference genome.
 
 @Author: Luis Javier Madrigal-Roca
 @Date:   2026-04-30
@@ -103,12 +117,26 @@ def validate_ase_file(filepath, parent1_label, parent2_label):
     """
     try:
         with open(filepath, 'r') as f:
-            lines = f.readlines()
+            # ASErtain tables open with a '#' provenance block.
+            lines = [line for line in f if not line.startswith('#')]
     except IOError as e:
         raise ValueError(f"Cannot read ASE counts file: {e}")
     
     if len(lines) < 2:
         raise ValueError("ASE counts file must have at least 2 rows (header + 1 gene)")
+
+    # An ASErtain gene table is accepted as it is; the R script maps its columns.
+    asertain_header = lines[0].rstrip('\n').split('\t')
+    if all(col in asertain_header for col in ('gene_id', 'ase_call', 'direction', 'n_snps')):
+        wanted = (f"mean_{parent1_label}_ratio", f"mean_{parent2_label}_ratio")
+        if not any(col in asertain_header for col in wanted):
+            raise ValueError(
+                f"ASErtain gene table has neither '{wanted[0]}' nor '{wanted[1]}'.\n"
+                f"       --parent1-label / --parent2-label must be the lineage labels "
+                f"used in the ASErtain config.\n"
+                f"       Found columns: {', '.join(asertain_header)}"
+            )
+        return "asertain"
     
     # Parse header
     try:
@@ -195,6 +223,7 @@ def validate_ase_file(filepath, parent1_label, parent2_label):
                 f"ASE file row {i}: '{p2_ratio_col}' should be float in [0, 1], "
                 f"got '{fields[p2_idx]}' ({e})"
             )
+    return "legacy"
 
 
 def main(args):
@@ -230,10 +259,14 @@ def main(args):
     # Validate ASE counts file -------------------------------------------
     print("Validating ASE counts file...", file=sys.stderr)
     try:
-        validate_ase_file(args.ase_counts_file, args.parent1_label, args.parent2_label)
+        ase_format = validate_ase_file(args.ase_counts_file, args.parent1_label,
+                                       args.parent2_label)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
+    if ase_format == "legacy":
+        print("NOTE: legacy ASE table — 'biased' will mean bias_ratio > 0.5, which is "
+              "a majority vote over SNPs, not a statistical test.", file=sys.stderr)
 
     # Validate FDR threshold ------------------------------------------
     if args.fdr_threshold < 0 or args.fdr_threshold > 1:
@@ -243,16 +276,22 @@ def main(args):
         )
         sys.exit(1)
 
+    # The two parent groups name the parental DE comparison and its direction;
+    # they are useful on their own and must come as a pair.
+    if (args.parent1_group is None) != (args.parent2_group is None):
+        print("ERROR: --parent1-group and --parent2-group must be given together.",
+              file=sys.stderr)
+        sys.exit(1)
+
     # Validate advanced-mode dependencies (all-or-nothing) ----------------
     advanced_args = [
         args.expression_file,
         args.metadata_file,
         args.hybrid_group,
-        args.parent1_group,
-        args.parent2_group,
     ]
     n_advanced = sum(a is not None for a in advanced_args)
-    if 0 < n_advanced < len(advanced_args):
+    if 0 < n_advanced < len(advanced_args) or (
+            n_advanced == len(advanced_args) and args.parent1_group is None):
         print(
             "ERROR: Advanced Ad/Ed analysis requires ALL of: "
             "--expression-file, --metadata-file, --hybrid-group, "
@@ -307,6 +346,8 @@ def main(args):
     print(f"FDR threshold   : {args.fdr_threshold}")
     print(f"Parent 1 label  : {args.parent1_label}")
     print(f"Parent 2 label  : {args.parent2_label}")
+    if args.parent1_group:
+        print(f"Parental DE     : {args.parent1_group} vs {args.parent2_group}")
     if args.expression_file:
         print(f"Expression file : {args.expression_file}")
         print(f"Metadata file   : {args.metadata_file}")
@@ -381,7 +422,7 @@ Examples:
     )
     parser.add_argument(
         "--ase-counts-file", required=True,
-        help="Per-gene ASE read counts file (ase_counts_per_gene.txt format)."
+        help=("Per-gene ASE table: an ASErtain <prefix>.gene_ase.tsv (preferred; bias = ASErtain's ase_call) or the legacy ase_counts_per_gene.txt summary (bias = bias_ratio > 0.5, not a test).")
     )
     parser.add_argument(
         "--output-dir", required=True,
@@ -436,15 +477,13 @@ Examples:
     parser.add_argument(
         "--parent1-group", default=None,
         help=(
-            "Group label for parent 1 samples in metadata "
-            "(e.g. 'P_barbatus_Leaf'). Required with --expression-file."
+            "Group label for parent 1 in the DE results (e.g. 'P_barbatus_Leaf'). With --parent2-group it names the parental comparison to classify and fixes its direction; without the pair the comparison is inferred from the parent labels occurring in the group names. Required for Ad/Ed."
         )
     )
     parser.add_argument(
         "--parent2-group", default=None,
         help=(
-            "Group label for parent 2 samples in metadata "
-            "(e.g. 'P_virgatus_Leaf'). Required with --expression-file."
+            "Group label for parent 2 in the DE results (e.g. 'P_virgatus_Leaf')."
         )
     )
 

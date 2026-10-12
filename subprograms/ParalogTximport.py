@@ -7,8 +7,9 @@ Wraps src/R_src/tximport_features.R.
 
 ParalogMerge can already emit a summed count matrix, and for many purposes that is
 enough. What summing cannot produce is the **average transcript length** of a merged
-feature, and that is exactly the quantity edgeR and DESeq2 use to correct for
-composition differences between samples. tximport recomputes it from the Salmon
+feature, and that is exactly the quantity edgeR and DESeq2 use to correct for a
+feature's effective length differing between samples when its members change in
+relative abundance (library composition is separate, and handled by TMM). tximport recomputes it from the Salmon
 output, which is why it is the preferred route -- and why it should not require
 anyone to open R and write the call by hand.
 

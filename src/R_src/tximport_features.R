@@ -7,8 +7,10 @@
 #
 # Why this exists rather than a hand-summed matrix: summing counts across the
 # transcripts of a merged feature loses the average transcript length, and that
-# length is what edgeR/DESeq2 need to correct for composition differences between
-# samples. tximport recomputes it. The two supported ways of using the result:
+# length is what edgeR/DESeq2 need to correct for a feature's effective length
+# differing between samples when its transcripts (here, its member genes) change
+# in relative abundance. tximport recomputes it. (Library composition is a
+# separate matter, handled by TMM / size factors downstream.) The two supported ways of using the result:
 #
 #   countsFromAbundance = "no"
 #       Raw counts plus a length matrix. The most faithful route, but the

@@ -20,6 +20,16 @@ Metadata file format (tab-separated, --metadata-file):
   OPTIONAL COLUMNS (ignored by edger_de.R, may be present):
     species, tissue, platform, library, flowcell, lane, replicate, ...
 
+Replication (--collapse-replicates-by):
+  Every column of the count matrix is treated as an independent replicate of
+  its group. That is only true when each column is a different biological
+  unit. Several libraries from ONE individual (several tissue samples of one
+  plant, re-sequenced libraries, lanes) are not independent, and leaving them
+  as separate columns makes every dispersion too small and every p-value too
+  optimistic. Name the metadata column that identifies the biological unit
+  with --collapse-replicates-by and the libraries sharing a value are summed
+  into one column before the analysis (what edgeR's sumTechReps does).
+
 CLI groups (--group-samples, used when --metadata-file is absent):
   Format:  GroupLabel:sample1,sample2,sample3  (space-separated per group)
   Example: --group-samples SpeciesA:s1,s2,s3 SpeciesB:s4,s5,s6
@@ -226,6 +236,114 @@ def write_temp_metadata(rows, tmp_dir):
     return fh.name
 
 
+def _find_column(header, *names):
+    """Index of the first header entry matching one of `names`, case-insensitively."""
+    lower = [h.strip().lower() for h in header]
+    for name in names:
+        if name.lower() in lower:
+            return lower.index(name.lower())
+    return None
+
+
+def collapse_replicates(expression_file, metadata_file, unit_column, output_dir,
+                        sample_suffix=None):
+    """Sum the count columns of libraries that belong to one biological unit.
+
+    Returns (collapsed_counts_path, collapsed_metadata_path). The collapsed
+    metadata has one row per unit (sample_name = the unit's label, its group,
+    and the libraries that went into it) so the provenance stays on disk.
+
+    Raises ValueError when the unit column is missing, when a unit spans more
+    than one group (it would have no well-defined group), or when no library
+    in the metadata is found in the matrix.
+    """
+    with open(metadata_file, newline="") as handle:
+        rows = [r for r in csv.reader(handle, delimiter="\t") if r and any(c.strip() for c in r)]
+    if len(rows) < 2:
+        raise ValueError("metadata file has no sample rows")
+    header, body = rows[0], rows[1:]
+    sample_i = _find_column(header, "sample_name", "sample")
+    unit_i = _find_column(header, unit_column)
+    group_i = _find_column(header, "group")
+    species_i, tissue_i = _find_column(header, "species"), _find_column(header, "tissue")
+    if sample_i is None:
+        raise ValueError("metadata must contain a 'sample_name' or 'Sample' column")
+    if unit_i is None:
+        raise ValueError(
+            f"--collapse-replicates-by '{unit_column}' is not a metadata column "
+            f"(found: {', '.join(header)})")
+    if group_i is None and (species_i is None or tissue_i is None):
+        raise ValueError("metadata must contain 'group', or 'species' and 'tissue'")
+
+    def group_of(row):
+        if group_i is not None:
+            return row[group_i].strip()
+        return f"{row[species_i].strip()}_{row[tissue_i].strip()}"
+
+    with open(expression_file) as handle:
+        matrix_header = handle.readline().rstrip("\n").split("\t")
+        matrix_rows = [line.rstrip("\n").split("\t") for line in handle if line.strip()]
+    strip = (lambda name: re.sub(sample_suffix, "", name)) if sample_suffix else (lambda name: name)
+    column_of = {strip(name): i for i, name in enumerate(matrix_header) if i > 0}
+
+    units, unit_group, missing = {}, {}, []
+    for row in body:
+        sample, unit = row[sample_i].strip(), row[unit_i].strip()
+        if not unit:
+            raise ValueError(f"sample '{sample}' has an empty '{unit_column}' value")
+        group = group_of(row)
+        if unit_group.setdefault(unit, group) != group:
+            raise ValueError(
+                f"'{unit_column}' value '{unit}' appears in groups "
+                f"'{unit_group[unit]}' and '{group}'. A biological unit must belong "
+                f"to one group; if one individual was sampled for several groups "
+                f"(e.g. tissues), use a column that is unique per individual and group.")
+        if sample not in column_of:
+            missing.append(sample)
+            continue
+        units.setdefault(unit, []).append(sample)
+    if missing:
+        print(f"WARNING: {len(missing)} metadata sample(s) not in the count matrix and "
+              f"left out of the collapse: {', '.join(sorted(missing)[:5])}"
+              f"{' ...' if len(missing) > 5 else ''}", file=sys.stderr)
+    if not units:
+        raise ValueError("no metadata sample matches a count-matrix column "
+                         "(check sample_name values and --sample-suffix)")
+
+    os.makedirs(output_dir, exist_ok=True)
+    counts_path = os.path.join(output_dir, "collapsed_counts.tsv")
+    meta_path = os.path.join(output_dir, "collapsed_metadata.tsv")
+    unit_names = sorted(units)
+    with open(counts_path, "w") as out:
+        out.write("\t".join([matrix_header[0]] + unit_names) + "\n")
+        for fields in matrix_rows:
+            sums = []
+            for unit in unit_names:
+                total = sum(float(fields[column_of[s]]) for s in units[unit])
+                sums.append(str(int(total)) if total == int(total) else repr(total))
+            out.write("\t".join([fields[0]] + sums) + "\n")
+    with open(meta_path, "w") as out:
+        out.write("sample_name\tgroup\tn_libraries\tlibraries\n")
+        for unit in unit_names:
+            out.write(f"{unit}\t{unit_group[unit]}\t{len(units[unit])}\t"
+                      f"{','.join(units[unit])}\n")
+
+    per_group = {}
+    for unit in unit_names:
+        per_group[unit_group[unit]] = per_group.get(unit_group[unit], 0) + 1
+    n_libraries = sum(len(v) for v in units.values())
+    print(f"Collapsed {n_libraries} libraries into {len(unit_names)} biological "
+          f"unit(s) by '{unit_column}': "
+          + ", ".join(f"{g}={n}" for g, n in sorted(per_group.items())))
+    single = sorted(g for g, n in per_group.items() if n < 2)
+    if single:
+        print(f"WARNING: group(s) with a single biological unit after collapsing: "
+              f"{', '.join(single)}. They contribute nothing to the dispersion "
+              f"estimate; contrasts involving them rest on the variability of the "
+              f"other groups.", file=sys.stderr)
+    return counts_path, meta_path
+
+
 def main(args):
     r_script = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -307,6 +425,11 @@ def main(args):
         )
         sys.exit(1)
 
+    if getattr(args, "collapse_replicates_by", None) and not args.metadata_file:
+        print("ERROR: --collapse-replicates-by needs --metadata-file (the column "
+              "naming each library's biological unit lives there).", file=sys.stderr)
+        sys.exit(1)
+
     # Validate metadata file (if provided, not auto-generated) -----------
     if args.metadata_file:
         print("Validating metadata file...", file=sys.stderr)
@@ -322,6 +445,19 @@ def main(args):
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    # Collapse libraries of one biological unit, if asked ------------------
+    expression_path = args.expression_file
+    collapse_by = getattr(args, "collapse_replicates_by", None)
+    if collapse_by:
+        try:
+            expression_path, metadata_path = collapse_replicates(
+                args.expression_file, metadata_path, collapse_by,
+                args.output_dir, sample_suffix=args.sample_suffix)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+        args.sample_suffix = None       # already applied while collapsing
+
     # Build R command ------------------------------------------------------
     sample_suffix = args.sample_suffix if args.sample_suffix else "NULL"
     export_normalized = getattr(args, "export_normalized_expression", False)
@@ -330,7 +466,7 @@ def main(args):
     cmd = [
         args.rscript_executable,
         r_script,
-        args.expression_file,
+        expression_path,
         args.output_dir,
         metadata_path,
         str(args.fdr_threshold),
@@ -448,6 +584,12 @@ Examples:
             "Regex pattern stripped from count matrix column names before "
             "matching to metadata sample_name values "
             "(e.g. '_R1_filtered$'). Optional."
+        )
+    )
+    parser.add_argument(
+        "--collapse-replicates-by", default=None, metavar="COLUMN",
+        help=(
+            "Metadata column naming the biological unit each library came from (e.g. 'individual'). Libraries sharing a value are summed into one column before the analysis, as edgeR's sumTechReps does. Use it whenever several libraries come from one individual: left as separate columns they are counted as independent replicates and the p-values are too small. Requires --metadata-file."
         )
     )
     parser.add_argument(

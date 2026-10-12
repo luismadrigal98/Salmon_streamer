@@ -20,11 +20,11 @@ This document specifies the exact format requirements for input files used by `E
 
 ```
 gene_id         sample_1        sample_2        sample_3        sample_4
-AT1G01010       150             142             168             155
-AT1G01020       0               5               12              8
-AT1G01030       1234            1456            1290            1512
-AT1G01040       0               0               0               0
-AT1G01050       567             489             601             523
+GENE0001        150             142             168             155
+GENE0002        0               5               12              8
+GENE0003        1234            1456            1290            1512
+GENE0004        0               0               0               0
+GENE0005        567             489             601             523
 ```
 
 ### Rules
@@ -65,10 +65,11 @@ Choose ONE of these options:
 **Option A** (Recommended):
 - `sample_name`: Must match count matrix column headers exactly (after `--sample-suffix` stripping)
 - `group`: Experimental group label (e.g., "Hybrid_Leaf", "Parent1_Root")
+- *(optional)* a column naming the **biological unit** each library came from (for example `individual`), passed to `EdgeRDE --collapse-replicates-by`. Libraries sharing a value are summed into one column before the analysis. Needed whenever several libraries come from one individual; each value must belong to a single group
 
 **Option B**:
 - `sample_name`: Must match count matrix column headers exactly
-- `species`: Species or line name (e.g., "Arabidopsis", "Parent1")
+- `species`: Species or line name (e.g., "LineA", "Parent1")
 - `tissue`: Tissue type (e.g., "leaf", "root")
 - EdgeRDE will derive `group` as `{species}_{tissue}`
 
@@ -218,23 +219,23 @@ Caper_gene_003  12          0.92         ChiliPepper       0.08               0.
 
 ### Recommended
 
-- Expression files: `{species}_counts.tsv` or `{cross}_raw_counts.tsv`
-- Metadata files: `{species}_metadata.tsv` or `{cross}_sample_info.tsv`
-- ASE files: `{species}_ase_counts.tsv` or `{cross}_allele_bias.tsv`
+- Expression files: `{study}_counts.tsv` or `{cross}_raw_counts.tsv`
+- Metadata files: `{study}_metadata.tsv` or `{cross}_sample_info.tsv`
+- ASE files: `{study}_ase_counts.tsv` or `{cross}_allele_bias.tsv`
 - Output directories: `{analysis}_DE_results/`, `{analysis}_ASE_DE/`
 
 ### Examples
 
 ```
-# Arabidopsis × related species hybrid
-arabidopsis_counts.tsv
-arabidopsis_metadata.tsv
-arabidopsis_ase_counts.tsv
+# Named after the study
+study1_counts.tsv
+study1_metadata.tsv
+study1_ase_counts.tsv
 
-# Bell Pepper × Chili Pepper cross
-pepper_cross_counts.tsv
-pepper_cross_metadata.tsv
-pepper_cross_ase.tsv
+# Named after the cross
+lineA_x_lineB_raw_counts.tsv
+lineA_x_lineB_sample_info.tsv
+lineA_x_lineB_allele_bias.tsv
 ```
 
 ---
@@ -289,6 +290,11 @@ gene_id     snp_count   bias_ratio   predominant_bias   parent1_ratio   parent2_
 ```
 
 Simply provide this file directly to ASEIntegrate via `--ase-counts-file`.
+
+### ASErtain gene table (preferred)
+
+An ASErtain `<prefix>.gene_ase.tsv` can be passed to `--ase-counts-file` unchanged. It is recognised by its `gene_id`, `n_snps`, `direction` and `ase_call` columns plus a `mean_<label>_ratio` column, where `<label>` is one of the two values given as `--parent1-label` / `--parent2-label` (they must be the lineage labels of the ASErtain config). Lines starting with `#` are skipped. A gene is then treated as allelically biased when `ase_call` is true, which is a replicate-aware test; in the summary format above the criterion is `bias_ratio > 0.5`, a majority vote over SNPs.
+
 
 ---
 

@@ -32,9 +32,9 @@ These files are generated for each pairwise contrast between groups.
 **Example**:
 ```
 TranscriptID    logFC       F-statistic p-value     FDR         Significance
-AT1G01010       2.156       45.23       1.2e-08     3.5e-07     Significant
-AT1G01020       -1.345      12.34       0.0001      0.0015      Significant
-AT1G01030       0.234       2.1         0.15        0.38        Not Significant
+GENE0001        2.156       45.23       1.2e-08     3.5e-07     Significant
+GENE0002        -1.345      12.34       0.0001      0.0015      Significant
+GENE0003        0.234       2.1         0.15        0.38        Not Significant
 ```
 
 **Interpretation**:
@@ -58,8 +58,8 @@ AT1G01030       0.234       2.1         0.15        0.38        Not Significant
 **Example**:
 ```
 TranscriptID    logFC       F-statistic p-value     FDR         Significance
-AT1G01010       2.156       45.23       1.2e-08     3.5e-07     Significant
-AT1G01020       -1.345      12.34       0.0001      0.0015      Significant
+GENE0001        2.156       45.23       1.2e-08     3.5e-07     Significant
+GENE0002        -1.345      12.34       0.0001      0.0015      Significant
 ```
 
 **Usage**: Quick access to high-confidence DE genes; good for functional enrichment analysis.
@@ -363,213 +363,185 @@ Note that `EdgeRDE` instead produces an `F` column (quasi-likelihood F-statistic
 
 Location: `--output-dir` specified during ASEIntegrate run
 
+Files are written for the **parent 1 versus parent 2** comparison only. Cis/trans classification is not defined for parent-vs-F1 or other contrasts, so those `*_DE_results.tsv` files are skipped (the log names each one). `{comparison}` below is the name of the classified DE file without `_DE_results.tsv`, for example `Parent1_vs_Parent2`. How the parental comparison is found is described in the [workflow guide](./ase_de_integration_workflow.md#which-comparison-files-to-read). If none is found, or none of its genes has a row in the ASE table, the run stops with an error and writes no files.
+
+Example values in this section are illustrative, not results from a real dataset.
+
 ### Per-Comparison Files
 
 #### `{comparison}_with_ASE.tsv`
 
-**Description**: Merged DE and ASE results with regulatory categorization.
+**Description**: The DE table joined to the ASE table, one row per gene present in both, in the order of the DE table, with the regulatory category. Genes without an ASE row are not written.
 
-**Columns**:
+**Columns**, in order:
 
-| Column | Type | Source | Description |
-|--------|------|--------|-------------|
-| `TranscriptID` | string | DE results | Gene/transcript identifier |
-| `logFC` | float | DE results | Log2-fold change |
-| `p_value` | float | DE results | Raw p-value |
-| `FDR` | float | DE results | Adjusted p-value |
-| `gene_category` | string | Integration | Regulatory classification (see below) |
-| `snp_count` | int | ASE file | Number of diagnostic SNPs |
-| `bias_ratio` | float | ASE file | Fraction of SNPs with bias |
-| `predominant_bias` | string | ASE file | Which parent is biased ("parent1" or "parent2") |
-| `parent1_ratio` | float | ASE file | Fraction reads from parent 1 allele |
-| `parent2_ratio` | float | ASE file | Fraction reads from parent 2 allele |
+1. Every column of the DE table, unchanged (from `EdgeRDE`: `TranscriptID`, `logFC`, `logCPM`, `F`, `PValue`, `FDR`, `Significance`).
+2. `gene_id_base` and `logFC_parent1_vs_parent2`.
+3. The ASE columns, which depend on the kind of ASE table:
+   - **ASErtain gene table**: `snp_count` (ASErtain's `n_snps`), `bias_ratio` (empty), `predominant_bias` (ASErtain's `direction`), `ase_source`, `<parent1_label>_ratio` and `<parent2_label>_ratio` (from `mean_<label>_ratio`; the other one is one minus it), and `ase_q_value`, `ase_log2_ratio`, `ase_phase_discordance_cause` (ASErtain's `q_value`, `log2_ratio` and `phase_discordance_cause`, copied as they are). No other ASErtain column is carried over.
+   - **Summary (legacy) table**: every column of that table except `gene_id`, then `ase_source`.
+4. `is_DE`, `is_biased`, `bias_p1`, `ase_de_category`, `cis_log2`, `trans_log2`.
 
-**Gene Categories**:
+**Columns added by ASEIntegrate**:
 
-| Category | DE? | ASE Bias? | Meaning |
-|----------|-----|-----------|---------|
-| `cis` | Yes (FDR<0.05) | Yes (biased) | Regulatory sequence differences |
-| `trans` | Yes (FDR<0.05) | No (unbiased) | Trans-acting factor effects |
-| `trans_compensatory` | Yes (FDR<0.05) | Yes (opposite to DE) | Trans factors overcorrect cis diff |
-| `compensatory` | No (FDR≥0.05) | Yes (biased) | Cis differences masked by trans |
-| `no_divergence` | No (FDR≥0.05) | No (unbiased) | No regulatory divergence |
+| Column | Type | Description |
+|--------|------|-------------|
+| `gene_id_base` | string | `TranscriptID` with any `.T[digit]` suffix removed; the join key, matched against `gene_id` of the ASE table |
+| `logFC_parent1_vs_parent2` | float | The fold change oriented so that positive = higher in parent 1. Equals `logFC` when parent 1's group is named first in the comparison, `-logFC` otherwise |
+| `ase_source` | string | `asertain` or `legacy` |
+| `is_DE` | logical | `FDR` below the ASEIntegrate `--fdr-threshold`. The size of the fold change is not used, so this is not EdgeRDE's `Significance` column |
+| `is_biased` | logical | Allelic bias. With an ASErtain table: ASErtain's `ase_call`. With a summary table: `bias_ratio > 0.5` (a majority vote over SNPs, not a test) |
+| `bias_p1` | logical | `predominant_bias` equals `--parent1-label`. Every other value is read as "not parent 1", so a biased gene with a misspelled label is treated as biased toward parent 2 |
+| `ase_de_category` | string | `cis`, `trans_only`, `trans_compensatory`, `compensatory` or `no_divergence` |
+| `cis_log2` | float | log2 of the F1 allelic ratio, parent 1 over parent 2: `log2(p / (1 - p))` with `p` the parent 1 allele fraction, limited to 0.001–0.999 (descriptive) |
+| `trans_log2` | float | `logFC_parent1_vs_parent2 - cis_log2` (descriptive) |
 
-**Example**:
+**Category rule** (on `logFC_parent1_vs_parent2`):
+
+| `ase_de_category` | DE between parents (`is_DE`) | Allelic bias (`is_biased`) |
+|-------------------|--------------------|--------------|
+| `cis` | yes | yes, toward the more highly expressed parent |
+| `trans_compensatory` | yes | yes, toward the less highly expressed parent |
+| `trans_only` | yes | no |
+| `compensatory` | no | yes |
+| `no_divergence` | no | no |
+
+"Toward the more highly expressed parent" means bias toward parent 1 with a positive `logFC_parent1_vs_parent2`, or toward parent 2 with a negative one.
+
+`snp_count` is not part of the rule. In a summary table, a gene listed with `snp_count = 0` and `bias_ratio = 0` counts as unbiased, so it comes out `trans_only` when it is DE and `no_divergence` when it is not. Leave such genes out of the table if you do not want them classified.
+
+**Example** (selected columns, summary-table input):
 ```
-TranscriptID    logFC   FDR     gene_category      snp_count   bias_ratio  predominant_bias   parent1_ratio   parent2_ratio
-AT1G01010       2.15    0.001   cis                8           0.75        parent1            0.78            0.22
-AT1G01020       1.89    0.008   trans              4           0.50        parent1            0.51            0.49
-AT1G01030      -1.34    0.042   trans_compensatory 12          0.92        parent2            0.08            0.92
-AT1G01040       0.12    0.89    compensatory       6           0.67        parent1            0.65            0.35
-AT1G01050      -0.08    0.95    no_divergence      0           0.00        parent1            0.50            0.50
+TranscriptID   logFC   logFC_parent1_vs_parent2   FDR     predominant_bias   parent1_ratio   is_DE   is_biased   ase_de_category      cis_log2   trans_log2
+GENE0001       2.15    2.15                       0.001   parent1            0.78            TRUE    TRUE        cis                  1.83       0.32
+GENE0002       1.89    1.89                       0.008   parent1            0.51            TRUE    FALSE       trans_only           0.06       1.83
+GENE0003       1.34    1.34                       0.042   parent2            0.08            TRUE    TRUE        trans_compensatory   -3.52      4.86
+GENE0004       0.12    0.12                       0.89    parent1            0.65            FALSE   TRUE        compensatory         0.89       -0.77
+GENE0005       -0.08   -0.08                      0.95    parent2            0.49            FALSE   FALSE       no_divergence        -0.06      -0.02
+GENE0006       -1.60   -1.60                      0.002   parent2            0.20            TRUE    TRUE        cis                  -2.00      0.40
 ```
-
-**Usage**: Primary output for analysis; filter by category for downstream work.
-
----
 
 #### `{comparison}_ASE_category_summary.tsv`
 
-**Description**: Summary counts of genes per category.
-
-**Columns**:
+**Description**: One row per category that has at least one gene. The same table is printed in the log.
 
 | Column | Description |
 |--------|-------------|
-| `comparison` | Contrast name (e.g., "F1_hybrid_vs_Parent1") |
-| `n_cis` | Number of cis-regulated genes |
-| `n_trans` | Number of trans-regulated genes |
-| `n_trans_compensatory` | Number of trans-compensatory genes |
-| `n_compensatory` | Number of compensatory genes |
-| `n_no_divergence` | Number with no divergence |
-| `n_total_DE` | Total DE genes (cis + trans + trans_comp) |
-| `n_total_ASE` | Total with ASE info (all except no_divergence) |
-| `n_analyzed` | Total genes with both DE + ASE data |
+| `ase_de_category` | Category name |
+| `n_genes` | Number of genes |
+| `avg_logFC_parent1_vs_parent2` | Mean oriented fold change of those genes |
+| `avg_parent1_ratio` | Mean parent 1 allele fraction of those genes |
 
 **Example**:
 ```
-comparison              n_cis   n_trans n_trans_comp    n_compensatory  n_no_divergence
-F1_hybrid_vs_Parent1    234     156     89              45              2341
-F1_hybrid_vs_Parent2    198     201     76              52              2288
-Parent1_vs_Parent2      187     143     51              38              2301
+ase_de_category      n_genes   avg_logFC_parent1_vs_parent2   avg_parent1_ratio
+cis                  234       0.41                           0.61
+compensatory         45        0.03                           0.58
+no_divergence        2341      0.01                           0.50
+trans_compensatory   89        -0.12                          0.57
+trans_only           156       0.35                           0.50
 ```
 
-**Usage**: Quick summary statistics for tables and figures.
-
----
+Only genes with both a DE row and an ASE row are counted. A DE gene that has no ASE row is in none of these rows.
 
 #### `{comparison}_ASE_vs_DE.pdf` and `.png`
 
-**Description**: Scatter plot of logFC (x-axis) vs. allele ratio (y-axis).
+**Description**: Scatter plot of the oriented fold change (x) against the parent 1 allele fraction (y), coloured by `ase_de_category` (ColorBrewer Set2), with dashed reference lines at x = 0 and y = 0.5.
 
 **Visual elements**:
-- **X-axis**: logFC (expression difference)
-- **Y-axis**: Allele ratio bias (0 = all parent2, 1 = all parent1)
-- **Point colors**: Categories
-  - Red: cis-regulated
-  - Blue: trans-regulated
-  - Green: trans-compensatory
-  - Gray: compensatory
-  - Black: no divergence
-- **Reference lines**:
-  - Horizontal at y = 0.5 (unbiased alleles)
-  - Vertical at x = 0 (no expression difference)
+- **Title**: `ASE bias vs Differential Expression: {comparison}`
+- **X-axis**: `log2 Fold Change (<parent1_label> / <parent2_label>)`, the `logFC_parent1_vs_parent2` column
+- **Y-axis**: `<parent1_label> allele ratio (ASE)`, the `<parent1_label>_ratio` column (0 = all parent 2, 1 = all parent 1)
+- **Colours**: assigned to the categories present, in alphabetical order. A category can therefore have a different colour in another plot where one category is missing; read the legend under the plot.
 
-**Interpretation**:
-- **Upper right**: Cis + stronger in parent1 (expected concordance)
-- **Upper left**: cis + stronger in parent2 (expected concordance)
-- **Center + red dots**: Cis effects opposing expression difference
-- **Center + blue dots**: Trans effects with ~balanced alleles
-- **Spread of colors**: Mix of regulatory mechanisms
+**Interpretation**: the upper-right and lower-left quadrants are where expression and allelic bias agree (cis-regulatory divergence). The upper-left and lower-right quadrants are where they oppose (`trans_compensatory`).
 
-**Usage**: Visual summary of cis vs. trans regulatory landscape.
-
----
+The colour comes from the category, and the category uses the bias call (`is_biased`), not the position on the y-axis. A gene far from 0.5 that was not called biased is still drawn as `trans_only` or `no_divergence`.
 
 ### Global Summary Files
 
 #### `cis_regulatory_candidates_all.tsv`
 
-**Description**: All genes classified as `cis` across all comparisons (useful for prioritizing candidates).
+**Description**: Every gene labelled `cis`, with a leading `comparison` column followed by the columns of `{comparison}_with_ASE.tsv`, sorted by comparison and then by FDR. The file is written only when at least one gene is `cis`.
 
-**Columns**: Same as `*_with_ASE.tsv`
-
-**Rows**: Only genes with `gene_category == "cis"` in at least one comparison
-
-**Additional column** (optional): `comparisons_with_cis`
-- List of all comparisons where gene showed cis regulation
-
-**Usage**: Create candidate gene list for functional validation or fine-mapping studies.
-
----
+There is normally one classified comparison. When the parental comparison is inferred from the labels and more than one file qualifies (a design with several tissues, for instance), each one contributes its own rows, so a gene can appear once per comparison.
 
 #### `ase_vs_de_ad_ed_data.tsv`
 
-**Description**: Advanced regulatory classification using Ad/Ed framework (only if `--expression-file` provided).
-
-**Columns**:
+**Description**: Advanced mode only (`--expression-file`, `--metadata-file`, `--hybrid-group`, `--parent1-group`, `--parent2-group`). One row per gene present in both the ASE table and the expression matrix, matched after removing any `.T[digit]` suffix from the matrix IDs.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `TranscriptID` | string | Gene identifier |
-| `comparison` | string | Contrast name |
-| `logFC_observed` | float | Observed log2-fold change in hybrid |
-| `ad_estimate` | float | Estimated cis effect size |
-| `ed_estimate` | float | Estimated trans effect size |
-| `ad_plus_ed` | float | Sum of cis + trans (should ≈ logFC_observed) |
-| `regulatory_class` | string | Classification (see below) |
+| `parent1_avg`, `parent2_avg`, `hybrid_avg` | float | Mean TMM-normalised CPM per group |
+| `parental_log2` | float | `log2((parent1_avg + 0.5) / (parent2_avg + 0.5))` |
+| `parental_FDR` | float | FDR of the gene in the parental DE comparison; empty for a gene that is not in that DE table |
+| `parents_differ` | logical | `parental_FDR` is below `--fdr-threshold`. False for a gene that is not in the DE table |
+| `Ad` | float | `0.5 -` parent 1 allele fraction. Negative = parent 1 allele over-represented |
+| `parental_diff` | float | `parent1_avg - parent2_avg` |
+| `position_ratio` | float | `(hybrid_avg - parent2_avg) / parental_diff`; empty unless `parents_differ` |
+| `Ed` | float | `0.5 - position_ratio`: departure of the F1's total expression from mid-parent. Negative = parent 1-like; empty unless `parents_differ` |
+| `cis_log2` | float | log2 of the F1 allelic ratio, parent 1 over parent 2, as in `{comparison}_with_ASE.tsv` |
+| `trans_log2` | float | `parental_log2 - cis_log2`. Here the parental ratio comes from mean CPM, so the value differs from `trans_log2` in `{comparison}_with_ASE.tsv`, which uses the DE fold change |
+| `Regulation` | string | Class from the standard decomposition (below) |
 
-**Regulatory Classifications**:
+These columns follow the ASE columns (for an ASErtain table, the mapped ones listed under `{comparison}_with_ASE.tsv`), `is_biased_input` (the bias call that the basic categories use) and `ase_source`.
 
-| Class | Meaning |
-|-------|---------|
-| `Cis_dominant` | Cis effect >> trans effect; mostly explains logFC |
-| `Trans_dominant` | Trans effect >> cis effect; mostly explains logFC |
-| `Cis_trans_reinforcing` | Both effects in same direction; additive |
-| `Cis_trans_opposing` | Cis and trans effects in opposite directions |
-| `Trans_only` | Cis effect ≈ 0; all logFC from trans |
-| `Ambiguous` | Effects unclear or don't add up well |
+**`Regulation` classes** ("cis": `|Ad| > 0.1`, i.e. allele fraction outside 0.5 ± 0.1; "trans": `|trans_log2| ≥ 1`):
 
-**Example**:
+| Class | Condition |
+|-------|-----------|
+| `Cis-only` | Parents differ; cis, no trans |
+| `Trans-only` | Parents differ; trans, no cis |
+| `Cis + Trans (Reinforcing)` | Parents differ; cis and trans, `cis_log2` and `trans_log2` of the same sign |
+| `Cis x Trans (Opposing)` | Parents differ; cis and trans, opposite signs |
+| `Compensatory` | Parents do not differ; alleles imbalanced |
+| `Conserved` | Parents do not differ; alleles balanced |
+| `Ambiguous` | Parents differ; neither component clears its threshold |
+
+The thresholds are descriptive; the trans component is not tested. `Ad` and `Ed` are deviations on a ratio scale, not log fold changes, and `Ed` measures dominance of expression rather than the trans effect.
+
+Two cases to keep in mind when reading the classes:
+- A gene that is in the expression matrix but not in the DE table (one removed by EdgeRDE's expression filter, for example) has `parents_differ` false, so it can only be `Compensatory` or `Conserved`.
+- In a summary table, a gene listed with no informative SNP and a ratio of 0.5 has `Ad = 0` and is treated as having balanced alleles.
+
+**Example** (selected columns):
 ```
-TranscriptID    comparison          logFC_observed  ad_estimate  ed_estimate  ad_plus_ed  regulatory_class
-AT1G01010       F1_hybrid_vs_P1     2.15            1.8          0.35         2.15        Cis_dominant
-AT1G01020       F1_hybrid_vs_P1     1.89            0.3          1.6          1.9         Trans_dominant
-AT1G01030       F1_hybrid_vs_P1    -1.34            0.8         -2.1         -1.3         Cis_trans_opposing
+gene_id    parent1_ratio   parents_differ   Ad      Ed      cis_log2   trans_log2   Regulation
+GENE0001   0.78            TRUE             -0.28   -0.01   1.83       0.15         Cis-only
+GENE0002   0.51            TRUE             -0.01   -0.39   0.06       1.79         Trans-only
+GENE0003   0.08            TRUE             0.42    0.46    -3.52      4.77         Cis x Trans (Opposing)
+GENE0004   0.65            FALSE            -0.15           0.89       -0.82        Compensatory
+GENE0005   0.49            FALSE            0.01            -0.06      -0.07        Conserved
 ```
 
-**Interpretation**:
-- **Cis-dominant**: Regulatory mutations in this gene's promoter/enhancer likely explain expression difference
-- **Trans-dominant**: Expression difference driven by factors acting on both alleles (TFs, chromatin modifiers)
-- **Cis-trans opposing**: Cis changes would increase expression, but trans factors reduce it (and vice versa)
-- **Reinforcing**: Cis and trans changes work together to create observed difference
+#### `regulatory_divergence_regressions.pdf` and `.png`
 
-**Usage**: Mechanistic understanding of expression evolution; prioritize genes for enhancer mapping or EMSA.
+**Description**: Advanced mode only. `Ad` (x) against `Ed` (y) for parentally DE genes in a single panel, coloured by `Regulation`, with one linear regression line and confidence band per class and dotted lines at zero. `Ambiguous` genes and genes with `Ed` outside -1.5 to 1.5 are left out; `Compensatory` and `Conserved` genes have no `Ed` and do not appear. The file is written only when at least one gene remains.
 
----
+**Visual elements**:
+- **Colours**: `Cis + Trans (Reinforcing)` red, `Cis x Trans (Opposing)` blue, `Trans-only` grey, `Cis-only` green
+- **Legend**: each class with its number of genes and the Pearson correlation (r, p) between `Ad` and `Ed` within the class
+- **Axes**: negative `Ad` = bias toward the parent 1 allele; negative `Ed` = F1 expression is parent 1-like
 
-#### `regulatory_divergence_regressions.pdf`
-
-**Description**: Plots showing Ad/Ed estimates with regression lines (only if `--expression-file` provided).
-
-**Content**:
-- Multiple panels: One per contrast
-- **X-axis**: Cis effect estimate (ad)
-- **Y-axis**: Trans effect estimate (ed)
-- **Points**: Genes; color by regulatory class
-- **Ellipses**: Confidence regions
-- **Regression line**: Mean relationship between cis and trans
-
-**Interpretation**:
-- **Points in quadrant I (upper right)**: Cis and trans reinforcing
-- **Points in quadrant III (lower left)**: Cis and trans opposing
-- **Spread of points**: Heterogeneity in regulatory mechanisms across genes
-
-**Usage**: Visualize overall regulatory landscape; publication figures.
-
----
+The colour is the cis/trans class, which is assigned from `Ad` and `trans_log2`. The position on the y-axis (`Ed`) is not what separates the classes.
 
 #### `session_info.txt`
 
-**Description**: R session information.
-
-**Same format as EdgeRDE's `session_info.txt`**
-
----
+**Description**: R `sessionInfo()` for the run.
 
 ### Summary of ASEIntegrate Output Files
 
 | File | Type | Count | Purpose |
 |------|------|-------|---------|
-| `{comparison}_with_ASE.tsv` | Data | N = comparisons | Merged DE + ASE per contrast |
-| `{comparison}_ASE_category_summary.tsv` | Data | N = comparisons | Category counts per contrast |
-| `{comparison}_ASE_vs_DE.pdf` | Plot | N = comparisons | Scatter: logFC vs. allele bias |
-| `cis_regulatory_candidates_all.tsv` | Data | 1 | All cis genes (all comparisons) |
-| `ase_vs_de_ad_ed_data.tsv` | Data | 1 | Ad/Ed classification (if advanced mode) |
-| `regulatory_divergence_regressions.pdf` | Plot | 1 | Ad/Ed visualization (if advanced mode) |
-| `session_info.txt` | Text | 1 | R environment info |
+| `{comparison}_with_ASE.tsv` | Data | 1 per classified comparison | Joined DE + ASE with category |
+| `{comparison}_ASE_category_summary.tsv` | Data | 1 per classified comparison | Genes per category |
+| `{comparison}_ASE_vs_DE.pdf` / `.png` | Plot | 2 per classified comparison | Fold change vs allele fraction |
+| `cis_regulatory_candidates_all.tsv` | Data | 0 or 1 | Genes labelled `cis` |
+| `ase_vs_de_ad_ed_data.tsv` | Data | 1 (advanced mode) | Cis/trans classes, Ad and Ed |
+| `regulatory_divergence_regressions.pdf` / `.png` | Plot | 0 or 2 (advanced mode) | Ad vs Ed |
+| `session_info.txt` | Log | 1 | R session |
 
-**Total files**: ~7 + (2-3 × number of comparisons), or ~9-12 if advanced mode enabled
+Only the parent 1 versus parent 2 comparison is classified, so "per classified comparison" is normally once per run.
 
 ---
 
@@ -585,14 +557,15 @@ project/
 │   └── ase_counts.tsv
 ├── results/
 │   ├── DE_results/
-│   │   ├── F1_vs_P1_DE_results.tsv
-│   │   ├── F1_vs_P1_volcano.pdf
+│   │   ├── Parent1_vs_Parent2_DE_results.tsv
+│   │   ├── Parent1_vs_Parent2_volcano.pdf
+│   │   ├── F1_hybrid_vs_Parent1_DE_results.tsv
 │   │   ├── PCA_plot.pdf
 │   │   ├── analysis_summary.txt
 │   │   └── ...
 │   ├── ASE_DE_results/
-│   │   ├── F1_vs_P1_with_ASE.tsv
-│   │   ├── F1_vs_P1_ASE_vs_DE.pdf
+│   │   ├── Parent1_vs_Parent2_with_ASE.tsv
+│   │   ├── Parent1_vs_Parent2_ASE_vs_DE.pdf
 │   │   ├── cis_regulatory_candidates_all.tsv
 │   │   └── ...
 │   └── figures/  (manually curated plots for papers)
@@ -616,27 +589,24 @@ This prevents accidentally overwriting results.
 
 ## Interpreting Combined Results
 
-### Workflow Example: Pepper Cross
+### Worked Reading (Illustrative Numbers)
 
-1. **EdgeRDE** identifies:
-   - 2,344 DE genes (F1 vs Parent1, FDR<0.05)
-   - Genes cluster well on PCA
+The counts below are invented to show how the two sets of outputs fit together. They are not results from a real dataset. The groups are `Parent1`, `Parent2` and `F1_hybrid`.
 
-2. **ASEIntegrate** categorizes those 2,344 into:
-   - 234 cis-regulated (allele-biased, DE concordant)
-   - 156 trans-regulated (unbiased alleles, DE still present)
-   - 89 trans-compensatory (allele-biased opposite to DE)
-   - 1,865 unmapped to ASE or ambiguous
+1. **EdgeRDE** writes three comparisons: `F1_hybrid_vs_Parent1`, `F1_hybrid_vs_Parent2` and `Parent1_vs_Parent2`. Suppose `Parent1_vs_Parent2_significant_genes.tsv` lists 1,823 genes (FDR < 0.05).
 
-3. **Summary interpretation**:
-   - ~10% of DE genes show strong cis divergence
-   - ~7% show interesting trans-compensatory pattern
-   - ~80% lack diagnostic SNPs (cannot determine cis vs. trans)
+2. **ASEIntegrate** classifies `Parent1_vs_Parent2` only and skips the two parent-vs-F1 files. `Parent1_vs_Parent2_ASE_category_summary.tsv` covers the genes that have both a DE row and an ASE row, 2,865 of them here:
+   - 234 `cis`, 156 `trans_only` and 89 `trans_compensatory`: the 479 DE genes that have ASE information
+   - 45 `compensatory` and 2,341 `no_divergence`: genes that are not DE between the parents
+
+3. **Reading it**:
+   - The other 1,344 of the 1,823 DE genes have no row in the ASE table, for example because they carry no informative SNP. They are absent from every ASEIntegrate file, so nothing is said about cis versus trans for them. They are not `no_divergence`.
+   - Proportions depend on the denominator, so state it. Over the 479 classified DE genes this is about 49% `cis`, 33% `trans_only` and 19% `trans_compensatory`.
+   - `is_DE` uses only `FDR` below the ASEIntegrate `--fdr-threshold`. It agrees with `*_significant_genes.tsv` when both commands were run with the same threshold, and it ignores the `--logfc-threshold` that EdgeRDE uses for its `Significance` column.
 
 4. **Next steps**:
-   - Prioritize 234 cis candidates for enhancer mapping
-   - Investigate 89 trans-compensatory genes for TF changes
-   - Use Advanced mode to quantify effect sizes
+   - Take candidate genes from `cis_regulatory_candidates_all.tsv`.
+   - Run the advanced mode for the per-gene `cis_log2` and `trans_log2` values and the `Regulation` class.
 
 ---
 

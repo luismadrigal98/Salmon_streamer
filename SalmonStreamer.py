@@ -456,6 +456,12 @@ def main():
         )
     )
     edger_de_parser.add_argument(
+        '--collapse-replicates-by', default=None, metavar='COLUMN',
+        help=(
+            "Metadata column naming the biological unit each library came from (e.g. 'individual'). Libraries sharing a value are summed into one column before the analysis, as edgeR's sumTechReps does. Use it whenever several libraries come from one individual: left as separate columns they are counted as independent replicates and the p-values are too small. Requires --metadata-file."
+        )
+    )
+    edger_de_parser.add_argument(
         '--export-normalized-expression', action='store_true',
         help=(
             'Export the TMM-normalized expression matrices (CPM and log2-CPM) '
@@ -548,7 +554,7 @@ def main():
     )
     ase_integrate_parser.add_argument(
         '--ase-counts-file', required=True,
-        help='Per-gene ASE read counts file (ase_counts_per_gene.txt format).'
+        help=("Per-gene ASE table: an ASErtain <prefix>.gene_ase.tsv (preferred; bias = ASErtain's ase_call) or the legacy ase_counts_per_gene.txt summary (bias = bias_ratio > 0.5, not a test).")
     )
     ase_integrate_parser.add_argument(
         '--output-dir', required=True,
@@ -557,9 +563,9 @@ def main():
     ase_integrate_parser.add_argument(
         '--parent1-label', default='parent1',
         help=(
-            "Value in the 'predominant_bias' column representing parent 1, "
-            "and prefix for the ratio column (e.g. 'barbatus' -> 'barbatus_ratio'). "
-            "Default: 'parent1'."
+            "Label of parent 1: the 'predominant_bias' value and '<label>_ratio' "
+            "column prefix in a legacy table, or the lineage label used in the "
+            "ASErtain config. Default: 'parent1'."
         )
     )
     ase_integrate_parser.add_argument(
@@ -584,11 +590,11 @@ def main():
     )
     ase_integrate_parser.add_argument(
         '--parent1-group', default=None,
-        help="Group label for parent 1 samples in metadata (e.g. 'P_barbatus_Leaf')."
+        help=("Group label for parent 1 in the DE results (e.g. 'P_barbatus_Leaf'). With --parent2-group it names the parental comparison to classify and fixes its direction; without the pair the comparison is inferred from the parent labels occurring in the group names. Required for Ad/Ed.")
     )
     ase_integrate_parser.add_argument(
         '--parent2-group', default=None,
-        help="Group label for parent 2 samples in metadata (e.g. 'P_virgatus_Leaf')."
+        help="Group label for parent 2 in the DE results (e.g. 'P_virgatus_Leaf')."
     )
     ase_integrate_parser.add_argument(
         '--rscript-executable',

@@ -453,8 +453,15 @@ def add_arguments(parser):
     policy.add_argument(
         "--min-ambiguity", type=float, default=0.2,
         help="Merge a group only if its most ambiguous member shares at least this "
-             "fraction of its reads within the group. The default of 0.2 comes from "
-             "gene-tree calibration; verify it for your data with ParalogTreeCheck.",
+             "fraction of its reads within the group. The default of 0.2 is one "
+             "dataset's calibrated value, not a general one: derive yours with "
+             "ParalogTreeCheck. Note the statistic: ParalogTreeCheck's 'ambiguity' "
+             "column (and ParalogGroups / ParalogTracks) use the LEAST ambiguous "
+             "member, this option the MOST ambiguous one. A cutoff taken from that "
+             "column therefore keeps every tree-confirmed pair but merges at least "
+             "as many groups as it was calibrated for; calibrate on the "
+             "'ambiguity_most_member' column, or add "
+             "--require-all-members-ambiguous, to threshold the same quantity.",
     )
     policy.add_argument(
         "--min-samples", type=int, default=1,

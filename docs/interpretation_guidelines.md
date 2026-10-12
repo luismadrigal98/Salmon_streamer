@@ -244,7 +244,7 @@ When you open `*_with_ASE.tsv`, what matters?
 | `FDR` | Statistical confidence in DE | <0.05 usually means "believe it"; <0.01 more confident |
 | `snp_count` | Reliability of ASE estimate | ≥4 means robust; <2 means uncertain |
 | `bias_ratio` | Consistency of allele bias | >0.75 means very strong; 0.5 means no bias |
-| `gene_category` | Regulatory mechanism | Tells you cis vs. trans |
+| `ase_de_category` | Regulatory mechanism | Tells you cis vs. trans |
 | `parent1_ratio` | Which allele dominates | >0.75 = strong parent1 bias; ≈0.5 = no bias |
 
 ### Example: Parsing a Single Gene Row
@@ -253,7 +253,7 @@ When you open `*_with_ASE.tsv`, what matters?
 TranscriptID: AT1G15234
 logFC: 2.45
 FDR: 2.3e-05
-gene_category: cis
+ase_de_category: cis
 snp_count: 7
 bias_ratio: 0.86
 predominant_bias: parent1
@@ -279,7 +279,7 @@ parent2_ratio: 0.18
 TranscriptID: AT1G89456
 logFC: 0.34
 FDR: 0.67
-gene_category: no_divergence
+ase_de_category: no_divergence
 snp_count: 0
 bias_ratio: 0.00
 predominant_bias: parent1
@@ -306,7 +306,7 @@ For your manuscript:
 ```sql
 SELECT TranscriptID, logFC, FDR, bias_ratio, snp_count 
 FROM *_with_ASE.tsv
-WHERE gene_category = "cis" 
+WHERE ase_de_category = "cis" 
   AND FDR < 0.01
   AND snp_count >= 4
   AND abs(logFC) > 1.0
@@ -327,10 +327,10 @@ This gives you:
 # Pseudocode for enhanced volcano plot
 ase_data <- read.table("comparison_with_ASE.tsv")
 
-colors <- ifelse(ase_data$gene_category == "cis", "red",
-         ifelse(ase_data$gene_category == "trans", "blue",
-         ifelse(ase_data$gene_category == "trans_compensatory", "green",
-         ifelse(ase_data$gene_category == "compensatory", "orange", 
+colors <- ifelse(ase_data$ase_de_category == "cis", "red",
+         ifelse(ase_data$ase_de_category == "trans_only", "blue",
+         ifelse(ase_data$ase_de_category == "trans_compensatory", "green",
+         ifelse(ase_data$ase_de_category == "compensatory", "orange", 
                 "gray"))))
 
 plot(ase_data$logFC, -log10(ase_data$FDR),
@@ -411,36 +411,33 @@ If you have >50% DE genes, your groups might be too different (or same tissue no
 
 ---
 
-## Section 5: Advanced Analysis (Ad/Ed Framework)
+## Section 5: Advanced Analysis (cis/trans classes, Ad and Ed)
 
-If you ran the advanced mode with `--expression-file` and `--metadata-file`, you get the Ad/Ed regulatory framework output.
+If you ran the advanced mode (`--expression-file`, `--metadata-file`, `--hybrid-group` and the two parent groups), `ase_vs_de_ad_ed_data.tsv` holds two different kinds of number. Keep them apart.
 
-### Understanding Ad/Ed Estimates
+### The cis and trans components
 
-**Ad = Additive effect (cis)**
-- Positive `ad`: Cis change favors group1's allele
-- Negative `ad`: Cis change favors group2's allele
-- Large `|ad|`: Strong cis effect
+- `cis_log2`: log2 of the F1 allelic ratio, parent 1 over parent 2. Both alleles share one nucleus in the F1, so this is the cis effect.
+- `parental_log2`: log2 of the parental expression ratio. This is cis plus trans.
+- `trans_log2 = parental_log2 - cis_log2`.
 
-**Ed = Dominance effect (trans)**
-- Positive `ed`: Trans factors favor group1
-- Negative `ed`: Trans factors favor group2
-- Large `|ed|`: Strong trans effect
+`Regulation` classifies each gene from these (`Cis-only`, `Trans-only`, `Cis + Trans (Reinforcing)`, `Cis x Trans (Opposing)`, `Compensatory`, `Conserved`, `Ambiguous`). The thresholds are descriptive and the trans component is not tested, so treat a class as a description of where the gene sits, not as a significance call.
 
-### Example Interpretations
+### Ad and Ed
+
+- `Ad = 0.5 -` parent 1 allele fraction: the allelic imbalance on the fraction scale.
+- `Ed = 0.5 - (F1 - P2) / (P1 - P2)`: where the F1's *total* expression sits between the parents. Zero is mid-parent (additive); negative is parent 1-like.
+
+`Ed` is about dominance of expression, not about trans. They come apart in both directions: a purely additive trans difference gives `Ed = 0`, and an F1 can resemble the parent whose allele it expresses less. `Ed` is empty for genes whose parents are not differentially expressed, because there it would be a ratio of noise.
+
+### Example readings
 
 ```
-logFC = 2.0, ad = 1.8, ed = 0.2
-→ Cis DOMINATES (90% cis, 10% trans)
-
-logFC = 2.0, ad = 0.2, ed = 1.8
-→ Trans DOMINATES (10% cis, 90% trans)
-
-logFC = 2.0, ad = 1.5, ed = 0.5
-→ Cis and trans REINFORCE (same direction)
-
-logFC = 2.0, ad = 1.3, ed = -0.7
-→ Cis and trans OPPOSE (net effect = sum, but opposite signals)
+cis_log2 = 2.0, trans_log2 = 0.0, Ed = 0.0   -> Cis-only, additive inheritance
+cis_log2 = 0.0, trans_log2 = 1.5, Ed = -0.4  -> Trans-only, F1 parent 1-like (dominant)
+cis_log2 = 1.5, trans_log2 = 1.2             -> Cis + Trans (Reinforcing)
+cis_log2 = 1.9, trans_log2 = -3.7            -> Cis x Trans (Opposing)
+cis_log2 = 1.8, parents not different        -> Compensatory
 ```
 
 ---
@@ -520,7 +517,7 @@ logFC = 2.0, ad = 1.3, ed = -0.7
 
 ### Key Papers on Cis vs. Trans Regulation
 
-- **Wittkopp et al. (2004)** - Foundational Ad/Ed framework
+- **Wittkopp et al. (2004)** - Cis/trans decomposition from allelic expression in F1 hybrids
   - "Evolutionary changes in cis and trans gene regulation"
   - Nature Reviews Genetics
 

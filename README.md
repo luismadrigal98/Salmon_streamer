@@ -149,15 +149,17 @@ Salmon Streamer provides the following subcommands:
 
 ## Quick Start
 
-> **Two workflows are available depending on your data:**
-> - **Single-genome workflow** (one reference genome): Start at [Option A](#option-a-single-genome-workflow).
-> - **Dual-genome workflow** (reference + alternative genome, for allele-specific expression): Start at [Option B](#option-b-dual-genome-workflow).
+> **Two quantification routes are available. Choose by the reference genomes you have:**
+> - **Single-genome route** (one reference genome): Salmon quantifies reads against one transcriptome. Start at [Option A](#option-a-single-genome-workflow).
+> - **Dual-genome route** (reference + alternative genome): Salmon quantifies reads against a combined transcriptome that holds one copy of each gene per genome. Start at [Option B](#option-b-dual-genome-workflow).
+>
+> This is a choice of how reads are quantified, not of whether allele-specific analysis is possible. The dual-genome route is not a requirement for it: with a single reference genome, ASE can be obtained from F1 hybrid samples and a VCF covering the parents and the F1s (see the note under [Option B](#option-b-dual-genome-workflow)).
 
 ---
 
 ### Option A: Single-Genome Workflow
 
-Use this when you only have **one reference genome** and want to quantify read counts (e.g., standard RNA-seq differential expression, no allele-specific analysis needed).
+Use this when you have **one reference genome**. Salmon quantifies reads against a single transcriptome and the result is one read-count table (e.g., as input for differential expression with `EdgeRDE`).
 
 #### A1. Extract Transcriptome from Single Genome
 
@@ -253,14 +255,18 @@ python SalmonStreamer.py AnnTransfer \
 Generate combined transcriptome:
 ```bash
 python SalmonStreamer.py GenerateTranscriptome \
-    --alt-genome-id SWB \
-    --ref-genome-id IM767 \
+    --alt-genome-id ALT \
+    --ref-genome-id REF \
     --liftover-gff transferred_annotation.gff3 \
     --original-ref-gff reference_annotation.gff3 \
     --alt-genome-fasta alternative_genome.fa \
     --ref-genome-fasta reference_genome.fa \
     --output-dir ./transcriptome_output
 ```
+
+`ALT` and `REF` are placeholders for your own genome identifiers; each sequence in the combined transcriptome is named `<id>_<gene ID>`.
+
+> **Before choosing the identifiers:** the post-processing step ([step 4](#4-complete-post-processing-pipeline), `ProcessPost` / `TranslateSalmon`) is still site-specific. It has the reference label `IM767` hardcoded (`translate_salmon_outputs` in `src/postprocessing_utilities.py`) and does not accept any other reference identifier. If you intend to run that step, the reference identifier has to be `IM767` and each `--crosses` value has to be the `--alt-genome-id` of that cross, with no underscore in it.
 
 ### 2. Run RNA-seq Quantification
 
@@ -305,11 +311,13 @@ python SalmonStreamer.py ProcessSalmonOut \
 
 ```bash
 python SalmonStreamer.py ProcessPost \
-    --crosses SWB SF \
-    --quant-results-files QUANT_RESULTS_767_vs_SWB QUANT_RESULTS_767_vs_SF \
+    --crosses ALT1 ALT2 \
+    --quant-results-files QUANT_RESULTS_REF_vs_ALT1 QUANT_RESULTS_REF_vs_ALT2 \
     --cpm-min 5.0 \
     --output-dir ./processed_output
 ```
+
+One quant-results file per cross, in the same order as `--crosses`. This step currently works only when the reference identifier is `IM767`; see the note in [step 1](#1-prepare-genomes-and-transcriptome).
 
 `--genes-file` is optional. If provided, only genes in that file are included in the output. If omitted, all genes are included.
 
@@ -331,10 +339,10 @@ Compare expression between parental lines to identify differentially expressed g
 ```bash
 python SalmonStreamer.py ParentalDE \
     --expression-file combined_expression.txt \
-    --parent1-samples IM767 \
-    --parent2-samples SWB \
-    --parent1-name IM767 \
-    --parent2-name SWB \
+    --parent1-samples parent1 \
+    --parent2-samples parent2 \
+    --parent1-name Parent1 \
+    --parent2-name Parent2 \
     --output-dir ./DE_results \
     --test-method ttest \
     --fdr-threshold 0.05
@@ -556,10 +564,10 @@ Compare expression levels between two parental lines to identify differentially 
 ```bash
 python SalmonStreamer.py ParentalDE \
     --expression-file combined_expression.txt \
-    --parent1-samples IM767 \
-    --parent2-samples SWB \
-    --parent1-name IM767 \
-    --parent2-name SWB \
+    --parent1-samples parent1 \
+    --parent2-samples parent2 \
+    --parent1-name Parent1 \
+    --parent2-name Parent2 \
     --output-dir ./DE_results \
     --test-method ttest \
     --fdr-threshold 0.05
@@ -569,8 +577,8 @@ Key parameters:
 - `--expression-file`: Tab-delimited expression matrix (genes as rows, samples as columns)
 - `--parent1-samples`: Sample IDs or patterns for parent 1 (space-separated)
 - `--parent2-samples`: Sample IDs or patterns for parent 2 (space-separated)
-- `--parent1-name`: Name for parent 1 (e.g., IM767)
-- `--parent2-name`: Name for parent 2 (e.g., SWB)
+- `--parent1-name`: Name for parent 1 (e.g., Parent1)
+- `--parent2-name`: Name for parent 2 (e.g., Parent2)
 - `--test-method`: Statistical test to use ('ttest' or 'mannwhitney')
   - `ttest`: Welch's t-test (default, assumes unequal variances)
   - `mannwhitney`: Mann-Whitney U test (non-parametric, for non-normal distributions)
@@ -608,15 +616,16 @@ python SalmonStreamer.py EdgeRDE \
 - `--metadata-file`: Tab-separated metadata with `sample_name` and `group` columns (or `species`+`tissue`)
 - `--group-samples`: Alternatively, specify groups inline: `Group1:s1,s2,s3 Group2:s4,s5,s6`
 - `--sample-suffix`: Regex pattern to strip from column names before matching metadata (e.g., `"_R1_filtered$"`)
+- `--collapse-replicates-by`: Metadata column naming the biological unit each library came from (e.g. `individual`). Libraries sharing a value are summed into one column before the analysis. **Use it whenever several libraries come from one individual** (several tissue samples of one plant, re-sequenced libraries): every column of the matrix is otherwise treated as an independent replicate, which makes the dispersions too small and the p-values too optimistic. The collapsed matrix and a metadata file listing which libraries went into each unit are written to the output directory
 - `--fdr-threshold`: FDR cutoff for significance (default: 0.05)
 - `--logfc-threshold`: Log2-fold-change threshold for categorization (default: 1.0)
 
 **Example with inline groups**:
 ```bash
 python SalmonStreamer.py EdgeRDE \
-    --expression-file pepper_counts.tsv \
-    --group-samples BellPepper:BP_1,BP_2,BP_3 ChiliPepper:CP_1,CP_2,CP_3 F1:F1_1,F1_2,F1_3 \
-    --output-dir pepper_DE/
+    --expression-file counts.tsv \
+    --group-samples Parent1:P1_1,P1_2,P1_3 Parent2:P2_1,P2_2,P2_3 F1_hybrid:F1_1,F1_2,F1_3 \
+    --output-dir DE_results/
 ```
 
 **Output files**:
@@ -739,7 +748,7 @@ Derive the cutoff from the report rather than reading a value off the grid: the 
 
 **Gene-conversion screen.** `--conversion-report` collects pairs where read behaviour and tree position disagree: the reads cannot separate the copies, but the tree places them far apart, or places another taxon's gene closer to one copy than the copies are to each other. Under plain divergent evolution those two axes are redundant, which is why detection normally falls off cleanly with patristic distance; conversion breaks the redundancy by overwriting one copy with the other after the duplication. Tune with `--conversion-min-ambiguity` (default `0.2`) and `--conversion-min-distance` (default `0.05`, below the ~0.08 point where 150 bp reads normally start separating copies).
 
-This is a screen, not a test. A misassembled duplicate, an under-sampled tree, or a badly aligned region produces the same pattern, and the screen only sees genes that appear in the supplied trees. Confirm a candidate with sequence-level evidence — a sliding-window identity scan across the pair, or a formal test such as GENECONV — before calling conversion. An empty report is a real result: it means read ambiguity tracks tree divergence with no outliers in the families you supplied.
+This is a screen, not a test. A misassembled duplicate, an under-sampled tree, or a badly aligned region produces the same pattern — and so, most commonly, does ordinary rate variation along a gene: a conserved domain keeps an old pair's reads ambiguous with no conversion at all. The screen only sees genes that appear in the supplied trees. Confirm a candidate with sequence-level evidence — a sliding-window identity scan across the pair, or a formal test such as GENECONV — before calling conversion. An empty report is a real result: it means read ambiguity tracks tree divergence with no outliers in the families you supplied.
 
 **Step 4 — build the merged features.**
 
@@ -765,6 +774,8 @@ python SalmonStreamer.py ParalogMerge \
     --out-report paralog_features_report.tsv
 ```
 
+One thing to know about that number. The tree report's `ambiguity` column is the *less* ambiguous member of each pair, while `ParalogMerge --min-ambiguity` thresholds the *more* ambiguous member of a group (one copy that cannot stand alone is enough to merge). A cutoff read from `ambiguity` therefore keeps every tree-confirmed pair but admits at least as many groups as it was calibrated on. To threshold the same quantity that was calibrated, either derive the cutoff from the report's last column, `ambiguity_most_member`, or add `--require-all-members-ambiguous` to the merge.
+
 `--min-unique-reads` is *not* tree-derived — it comes from the estimability argument above
 (precision goes as `1/sqrt(unique reads)`, so 20 is roughly a 22% CV) and stays put when the
 trees change.
@@ -772,7 +783,7 @@ trees change.
 Merged features are named `PARA_<first gene>_n<k>`. Omit `--quant-dirs`/`--counts` to emit only the feature definition — the map depends on the groups, not on any particular quantification, so one map applies to whichever counts the DE analysis uses.
 
 Two routes downstream:
-- **`ParalogTximport` (preferred)** — step 4b below. Aggregates with tximport, which recomputes the average transcript length of each merged feature. Summing counts by hand cannot produce that, and it is what edgeR/DESeq2 use to correct for composition differences between samples.
+- **`ParalogTximport` (preferred)** — step 4b below. Aggregates with tximport, which recomputes the average transcript length of each merged feature. Summing counts by hand cannot produce that, and it is what edgeR/DESeq2 use to correct for a feature's effective length differing between samples when its members change in relative abundance (library composition is a separate matter, handled by TMM).
 - **`-o merged_counts.tsv`** for a merged matrix directly. `ParalogMerge` verifies read conservation (total in = total out) and stops rather than writing a matrix that fails it. Simpler, and fine when the model does not use length offsets.
 
 **Step 4b — aggregate with tximport (preferred route).**
@@ -799,8 +810,11 @@ python SalmonStreamer.py ParalogTracks \
     --groups paralog_groups_all.tsv \
     --gff annotation.gff \
     --min-ambiguity "$MIN_AMB" --min-samples 20 \
+    --ambiguity-member most \
     --prefix paralog_groups_calibrated
 ```
+
+`--ambiguity-member most` applies the cutoff to a group's most ambiguous member, which is what `ParalogMerge` does by default, so the tracks show the groups the merge considered. Without it the cutoff applies to the least ambiguous member (as in `ParalogGroups`) and the tracks show a stricter, smaller set.
 
 Writes `<prefix>.bed` (BED score = ambiguity × 1000, so strong groups shade darker) and `<prefix>_loci.txt` (paste-able IGV coordinates). Load the **plain aligned BAM**, not a secondary-filtered one — the multimapping reads are the evidence, and filtering has removed exactly what you are looking for. Aligners give reads they could not place uniquely MAPQ 0 (STAR uses 0–3, reserving 255 for unique) and IGV draws those pale, so a genuine group reads as a washed-out pile-up spanning every copy.
 
@@ -823,19 +837,7 @@ This analysis is essential for understanding the evolutionary basis of expressio
 
 **`ASEIntegrate` does not compute ASE.** It consumes a finished per-gene ASE table (`--ase-counts-file`) and joins it to the `*_DE_results.tsv` files from EdgeRDE by gene ID. It never reads a genome, so it needs neither a second reference nor the [dual-genome quantification route](#option-b-dual-genome-workflow). What the analysis does need is F1 hybrid samples and SNPs that distinguish the parental alleles, and the allele counting has to be done beforehand with a separate tool.
 
-[ASErtain](https://github.com/luismadrigal98/ASErtain) is the single-reference way to obtain ASE: it works from one reference genome, a VCF covering the parents and the F1s, and the F1 BAM files. Its `*.gene_ase.tsv` is **not yet in the `ASEIntegrate` input format** (it has no `snp_count`, `bias_ratio`, `predominant_bias` or `<label>_ratio` columns), so either reshape it into those columns or do the cis/trans join in ASErtain itself, pointing `asertain contrast` at the EdgeRDE table:
-
-```bash
-asertain contrast \
-    --gene-ase runs/study.gene_ase.tsv \
-    --parental-de DE_results/Parent1_vs_Parent2_DE_results.tsv \
-    --de-gene-col TranscriptID \
-    --de-log2-col logFC \
-    --de-padj-col FDR \
-    --out runs/study
-```
-
-See [Step 3 of the workflow guide](docs/ase_de_integration_workflow.md#step-3-prepare-ase-counts-file) for the column mapping and for the fold-change orientation and gene-ID caveats of this route.
+[ASErtain](https://github.com/luismadrigal98/ASErtain) is the single-reference way to obtain ASE: it works from one reference genome, a VCF covering the parents and the F1s, and the F1 BAM files. Pass its `<prefix>.gene_ase.tsv` straight to `--ase-counts-file`, with `--parent1-label` / `--parent2-label` set to the lineage labels of the ASErtain config. A gene then counts as allelically biased when ASErtain *called* it (a replicate-aware test with an effect floor), in ASErtain's direction. The older summary table (`snp_count`, `bias_ratio`, `predominant_bias`, `<label>_ratio`) is still accepted, but there "biased" means `bias_ratio > 0.5` — a majority vote over SNPs, not a test.
 
 **Basic analysis** (cis/trans categorization):
 ```bash
@@ -848,7 +850,7 @@ python SalmonStreamer.py ASEIntegrate \
     --parent2-label parent2
 ```
 
-**Advanced analysis** (adds the Ad/Ed classification: allele deviation vs. expression deviation):
+**Advanced analysis** (adds the cis/trans classification that uses the F1's own expression, plus the Ad/Ed deviations):
 ```bash
 python SalmonStreamer.py ASEIntegrate \
     --de-results-dir DE_results/ \
@@ -871,19 +873,21 @@ python SalmonStreamer.py ASEIntegrate \
 - `--parent1-label`: Label for parent 1 allele (must match ASE file column name)
 - `--parent2-label`: Label for parent 2 allele (must match ASE file column name)
 - `--fdr-threshold`: FDR cutoff for DE significance
-- `--expression-file`, `--metadata-file`: Required for advanced Ad/Ed analysis
-- `--hybrid-group`, `--parent1-group`, `--parent2-group`: Group labels in metadata for advanced analysis
+- `--parent1-group`, `--parent2-group`: The two parental group names as they appear in the DE file names. They say which comparison is the parental one and which way round it is; give them whenever the group names do not contain the parent labels
+- `--expression-file`, `--metadata-file`, `--hybrid-group`: Add these (with the two parent groups) for the advanced analysis
 
 **Output files**:
 - `{comparison}_with_ASE.tsv`: Merged DE + ASE; the category is in the `ase_de_category` column
-- `{comparison}_ASE_category_summary.tsv`: One row per category (`ase_de_category`, `n_genes`, `avg_logFC`, `avg_bias_ratio`)
-- `{comparison}_ASE_vs_DE.pdf` / `.png`: Scatter plot (logFC vs. parent 1 allele ratio)
-- `cis_regulatory_candidates_all.tsv`: All genes labelled `cis`, across comparisons
+- `{comparison}_ASE_category_summary.tsv`: One row per category (`ase_de_category`, `n_genes`, `avg_logFC_parent1_vs_parent2`, `avg_parent1_ratio`)
+- `{comparison}_ASE_vs_DE.pdf` / `.png`: Scatter plot (parent 1 / parent 2 logFC vs. parent 1 allele ratio)
+- `cis_regulatory_candidates_all.tsv`: All genes labelled `cis`
 - Advanced mode also produces:
-  - `ase_vs_de_ad_ed_data.tsv`: Per-gene `Ad` (allele deviation), `Ed` (expression deviation), `position_ratio` and the `Regulation` class
-  - `regulatory_divergence_regressions.pdf` / `.png`: `Ad` vs. `Ed`, one regression line per class
+  - `ase_vs_de_ad_ed_data.tsv`: Per-gene `cis_log2`, `parental_log2`, `trans_log2`, the `Regulation` class, and the `Ad` / `Ed` deviations
+  - `regulatory_divergence_regressions.pdf` / `.png`: `Ad` vs. `Ed` for parentally DE genes, coloured by class
 
-`Ad` and `Ed` are deviations on a ratio scale, not log fold changes; they do not sum to `logFC`. Definitions are in the [workflow guide](docs/ase_de_integration_workflow.md#advanced-analysis-aded-classification).
+Only the parent 1 versus parent 2 comparison gets these files. `{comparison}_with_ASE.tsv` carries `logFC_parent1_vs_parent2` (the fold change re-oriented so that positive means higher in parent 1) next to the original `logFC`, plus `cis_log2` (log2 F1 allelic ratio) and `trans_log2` (parental log-ratio minus `cis_log2`).
+
+The advanced `Regulation` class is the standard decomposition — `Cis-only`, `Trans-only`, `Cis + Trans (Reinforcing)`, `Cis x Trans (Opposing)`, `Compensatory`, `Conserved`, `Ambiguous` — with descriptive thresholds (allele fraction outside 0.5 ± 0.1 for cis, `|trans_log2| ≥ 1` for trans) and no test of the trans component. `Ad` and `Ed` are reported alongside: `Ed` is where the F1's total expression sits between the parents, a measure of dominance rather than of trans, and it is left empty where the parents are not differentially expressed. Definitions are in the [workflow guide](docs/ase_de_integration_workflow.md#advanced-analysis-aded-classification).
 
 **Gene category interpretation** (values of `ase_de_category`):
 | Category | DE? | Allele Bias? | Meaning |
@@ -894,7 +898,7 @@ python SalmonStreamer.py ASEIntegrate \
 | compensatory | No | Yes | Cis differences masked by trans |
 | no_divergence | No | No | No regulatory divergence |
 
-**Which comparisons to read.** `ASEIntegrate` classifies every `*_DE_results.tsv` in `--de-results-dir`, and its rule assumes that a positive `logFC` means higher expression in parent 1. EdgeRDE writes all pairwise comparisons, names each `A_vs_B` with the groups in alphabetical order, and reports `logFC` as `A` minus `B`. So the categories are meaningful only for the parent-vs-parent file, and only when parent 1's group is named first; when parent 2's is, `cis` and `trans_compensatory` come out exchanged. The parent-vs-F1 files get category labels too, but they should not be reported as cis/trans results. Nothing checks or warns about this at present, and the behaviour is under review. Details are in the [workflow guide](docs/ase_de_integration_workflow.md#which-comparison-files-to-read).
+**Which comparison is classified.** Cis/trans is defined for parent 1 versus parent 2 only, and the rule needs a positive fold change to mean "higher in parent 1". EdgeRDE writes every pairwise comparison, names each `A_vs_B` with the groups in alphabetical order, and reports `logFC` as `A` minus `B`, so neither the right file nor its sign can be assumed. `ASEIntegrate` therefore finds the parental comparison, flips the sign when parent 2's group is named first, and skips every other file (it says so in the log). With `--parent1-group` / `--parent2-group` the match is exact; without them it is inferred from the parent labels occurring in the group names, which fails safely — nothing is classified and the run stops — when they do not.
 
 **Example workflow** (illustrative names, Pepper hybrid cross):
 ```bash
@@ -1138,6 +1142,12 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 **New Features:**
 - ✨ **EdgeRDE module**: Full edgeR quasi-likelihood differential expression pipeline with TMM normalization, adaptive `filterByExpr` filtering, all pairwise group contrasts, PCA, sample-correlation heatmap, volcano plots, and a summary report
+- 🔧 **Audit fixes (unreleased)**:
+  - `ASEIntegrate` classifies the parent 1 versus parent 2 comparison only and orients its fold change (`logFC_parent1_vs_parent2`); before, every pairwise DE file was classified and `cis` / `trans_compensatory` came out exchanged whenever parent 2's group sorted first. `--parent1-group` / `--parent2-group` can be given without the advanced inputs to name the comparison
+  - `ASEIntegrate` reads an ASErtain `gene_ase.tsv` directly (bias = ASErtain's call). The legacy summary table is still accepted, with a note that `bias_ratio > 0.5` is not a test
+  - The advanced classification now follows the standard cis/trans decomposition (`cis_log2`, `trans_log2`; adds `Cis-only`, `Compensatory`, `Conserved`). `Ed` is reported as what it is, a dominance measure, and only for parentally DE genes. `edgeR` is needed for this block only
+  - `EdgeRDE --collapse-replicates-by` sums libraries of one biological unit before the analysis
+  - `ParalogTreeCheck` reports `ambiguity_most_member`; `ParalogTracks --ambiguity-member most` draws the groups `ParalogMerge` thresholds
 - ✨ **EdgeRDEFromNormalized module**: limma-trend DE on a pre-normalized expression matrix. Designed for the "export TMM → collapse paralogs → re-analyze" workflow, but works on any matrix on a sample-comparable log-CPM or CPM scale. Outputs mirror EdgeRDE so `ASEIntegrate` plugs in unchanged.
 - ✨ **ASEIntegrate module**: Combine EdgeRDE results with per-gene allele-specific expression to classify regulatory divergence (cis, trans, cis+trans, compensatory) and optionally estimate Ad/Ed effect sizes
 - ✨ **TMM-normalized expression export**: New `--export-normalized-expression` flag on `EdgeRDE` writes the TMM-normalized CPM matrix, log2-CPM matrix, and per-sample normalization factors for manual inspection. Format selectable via `--normalized-expression-format {tsv,csv}` (default `tsv`)
