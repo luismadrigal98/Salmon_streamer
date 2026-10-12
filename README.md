@@ -266,7 +266,7 @@ python SalmonStreamer.py GenerateTranscriptome \
 
 `ALT` and `REF` are placeholders for your own genome identifiers; each sequence in the combined transcriptome is named `<id>_<gene ID>`.
 
-> **Before choosing the identifiers:** the post-processing step ([step 4](#4-complete-post-processing-pipeline), `ProcessPost` / `TranslateSalmon`) is still site-specific. It has the reference label `IM767` hardcoded (`translate_salmon_outputs` in `src/postprocessing_utilities.py`) and does not accept any other reference identifier. If you intend to run that step, the reference identifier has to be `IM767` and each `--crosses` value has to be the `--alt-genome-id` of that cross, with no underscore in it.
+> **Before choosing the identifiers:** the post-processing step ([step 4](#4-complete-post-processing-pipeline), `ProcessPost` / `TranslateSalmon`) and the genotype processing that follows it ([step 7](#7-process-genotypes)) are still site-specific. They have the reference label `IM767` hardcoded (`src/postprocessing_utilities.py`) and do not accept any other reference identifier. If you intend to run those steps, the reference identifier has to be `IM767` and each `--crosses` value has to be the `--alt-genome-id` of that cross, with no underscore in it.
 
 ### 2. Run RNA-seq Quantification
 
@@ -356,10 +356,10 @@ Available statistical tests:
 
 ```bash
 python SalmonStreamer.py ProcessGenotypes \
-    --cross SWB \
-    --allele-counts-file allele_counts.combined.updated767.SWB.txt \
-    --samples-file SWB.combined.samples.txt \
-    --genes-file Genes_to_updated_767_assembly.txt \
+    --cross ALT1 \
+    --allele-counts-file allele_counts.ALT1.txt \
+    --samples-file ALT1.combined.samples.txt \
+    --genes-file genes_mapping.txt \
     --min-parental-lines 5 \
     --mapping-threshold 0.95 \
     --output-dir ./genotype_output
@@ -370,10 +370,10 @@ python SalmonStreamer.py ProcessGenotypes \
 ```bash
 python SalmonStreamer.py MakePhenotypes \
     --genes-by-cross-file Genes_by_cross.txt \
-    --total-reads-files Total_reads_byplant.SF Total_reads_byplant.SWB \
-    --readcounts-files Readcounts.updated767.f2_SF.txt Readcounts.updated767.f2_SWB.txt \
-    --f2-lists SF.included.f2s.txt SWB.included.f2s.txt \
-    --crosses SF SWB \
+    --total-reads-files Total_reads_byplant.ALT2 Total_reads_byplant.ALT1 \
+    --readcounts-files Readcounts.f2_ALT2.txt Readcounts.f2_ALT1.txt \
+    --f2-lists ALT2.included.f2s.txt ALT1.included.f2s.txt \
+    --crosses ALT2 ALT1 \
     --output-dir ./phenotype_files
 ```
 
@@ -381,9 +381,9 @@ python SalmonStreamer.py MakePhenotypes \
 
 ```bash
 python SalmonStreamer.py PrepareQTLInputs \
-    --cross SWB \
-    --genotype-pp-file SWB.F2_geno_PP.txt \
-    --estimates-files estimates.SWB.Chr_01 estimates.SWB.Chr_02 \
+    --cross ALT1 \
+    --genotype-pp-file ALT1.F2_geno_PP.txt \
+    --estimates-files estimates.ALT1.Chr_01 estimates.ALT1.Chr_02 \
     --genes-by-cross-file Genes_by_cross.txt \
     --phenotype-group gene.group1 \
     --output-dir ./qtl_inputs
@@ -536,7 +536,7 @@ Supported R1/R2 patterns:
 
 **Translate Salmon Outputs**: Organize read counts by allele
 ```bash
-python SalmonStreamer.py TranslateSalmon SWB \
+python SalmonStreamer.py TranslateSalmon ALT1 \
     --quant-results-file QUANT_RESULTS.txt
 ```
 
@@ -857,21 +857,21 @@ python SalmonStreamer.py ASEIntegrate \
     --ase-counts-file ase_counts.tsv \
     --output-dir ASE_DE_results_advanced/ \
     --fdr-threshold 0.05 \
-    --parent1-label BellPepper \
-    --parent2-label ChiliPepper \
+    --parent1-label lineA \
+    --parent2-label lineB \
     --expression-file counts.tsv \
     --metadata-file metadata.tsv \
     --hybrid-group F1_hybrid \
-    --parent1-group BellPepper \
-    --parent2-group ChiliPepper
+    --parent1-group lineA \
+    --parent2-group lineB
 ```
 
 **Key parameters**:
 - `--de-results-dir`: Directory containing `*_DE_results.tsv` files from EdgeRDE
-- `--ase-counts-file`: Tab-separated file with per-gene allele counts (see documentation)
+- `--ase-counts-file`: Per-gene ASE table, either an ASErtain gene table or the older summary table (see documentation)
 - `--output-dir`: Output directory
-- `--parent1-label`: Label for parent 1 allele (must match ASE file column name)
-- `--parent2-label`: Label for parent 2 allele (must match ASE file column name)
+- `--parent1-label`: Label for parent 1: the lineage label of the ASErtain config, or in a summary table the `<label>_ratio` column prefix and the `predominant_bias` value (default `parent1`)
+- `--parent2-label`: The same for parent 2 (default `parent2`)
 - `--fdr-threshold`: FDR cutoff for DE significance
 - `--parent1-group`, `--parent2-group`: The two parental group names as they appear in the DE file names. They say which comparison is the parental one and which way round it is; give them whenever the group names do not contain the parent labels
 - `--expression-file`, `--metadata-file`, `--hybrid-group`: Add these (with the two parent groups) for the advanced analysis
@@ -900,26 +900,26 @@ The advanced `Regulation` class is the standard decomposition — `Cis-only`, `T
 
 **Which comparison is classified.** Cis/trans is defined for parent 1 versus parent 2 only, and the rule needs a positive fold change to mean "higher in parent 1". EdgeRDE writes every pairwise comparison, names each `A_vs_B` with the groups in alphabetical order, and reports `logFC` as `A` minus `B`, so neither the right file nor its sign can be assumed. `ASEIntegrate` therefore finds the parental comparison, flips the sign when parent 2's group is named first, and skips every other file (it says so in the log). With `--parent1-group` / `--parent2-group` the match is exact; without them it is inferred from the parent labels occurring in the group names, which fails safely — nothing is classified and the run stops — when they do not.
 
-**Example workflow** (illustrative names, Pepper hybrid cross):
+**Example workflow** (illustrative names; parental lines `lineA` and `lineB`, metadata groups `lineA`, `lineB` and `F1_hybrid`):
 ```bash
 # Step 1: Run EdgeRDE on expression counts
 python SalmonStreamer.py EdgeRDE \
-    --expression-file pepper_counts.tsv \
-    --metadata-file pepper_metadata.tsv \
-    --output-dir pepper_DE/
+    --expression-file counts.tsv \
+    --metadata-file metadata.tsv \
+    --output-dir DE_results/
 
 # Step 2: Run ASEIntegrate with ASE data
 python SalmonStreamer.py ASEIntegrate \
-    --de-results-dir pepper_DE/ \
-    --ase-counts-file pepper_ase.tsv \
-    --output-dir pepper_ASE_DE/ \
-    --parent1-label BellPepper \
-    --parent2-label ChiliPepper \
-    --expression-file pepper_counts.tsv \
-    --metadata-file pepper_metadata.tsv \
+    --de-results-dir DE_results/ \
+    --ase-counts-file ase_counts.tsv \
+    --output-dir ASE_DE_results/ \
+    --parent1-label lineA \
+    --parent2-label lineB \
+    --expression-file counts.tsv \
+    --metadata-file metadata.tsv \
     --hybrid-group F1_hybrid \
-    --parent1-group BellPepper \
-    --parent2-group ChiliPepper
+    --parent1-group lineA \
+    --parent2-group lineB
 ```
 
 **Documentation & Examples**:

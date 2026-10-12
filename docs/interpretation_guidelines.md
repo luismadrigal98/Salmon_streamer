@@ -4,47 +4,49 @@
 
 This guide helps you interpret the results of ASEIntegrate and EdgeRDE analyses, understand what the categories mean biologically, and troubleshoot common interpretive issues.
 
+Column names, categories and thresholds are those written by `ASEIntegrate`; the exact definitions are in the [Output Files Reference](./output_files_reference.md#aseintegrate-outputs). The biological readings are possibilities to weigh against other evidence, not conclusions the pipeline reaches for you.
+
 ---
 
 ## Section 1: Understanding Gene Categories
 
+### Before You Read the Categories
+
+- **One comparison.** ASEIntegrate classifies the parent 1 versus parent 2 comparison only. Wherever this guide says "DE", it means differential expression between the two parents, read from `logFC_parent1_vs_parent2` (positive = higher in parent 1). Parent-vs-F1 comparisons are skipped and have no cis/trans reading.
+- **"Biased" depends on the ASE table.** With an ASErtain gene table, a gene is biased when ASErtain called it (`ase_call`), which is a replicate-aware test. With the older summary table, a gene is biased when `bias_ratio > 0.5`, a majority vote over SNPs and not a test. The examples below use the summary table and show `bias_ratio`; with an ASErtain table that column holds `NA` and the call is in `is_biased`.
+- **The examples are illustrative.** Gene IDs and numbers are made up to show how a row is read. They are not results from a real dataset.
+
 ### The Five Categories Explained
 
 When ASEIntegrate categorizes genes, it combines two observations:
-1. **Is the gene's expression different between groups?** (DE analysis)
-2. **Is one parental allele preferentially expressed?** (ASE analysis)
+1. **Is the gene's expression different between the two parents?** (`is_DE`: `FDR` below `--fdr-threshold`, 0.05 by default; the size of the fold change is not used)
+2. **Is one parental allele preferentially expressed in the F1?** (`is_biased`)
 
-These two signals combine to infer the *type* of regulatory change.
+These two signals combine to suggest the *type* of regulatory change. The result is written to the `ase_de_category` column.
 
 ---
 
-#### Category 1: `cis`-regulated
+#### Category 1: `cis`
 
-**Definition**: Gene shows BOTH significant DE AND allelic bias.
+**Definition**: The gene is DE between the parents AND allelically biased in the F1, and the bias points to the more highly expressed parent.
 
 **Key characteristics**:
-- FDR < 0.05 (statistically different expression between groups)
-- High `bias_ratio` (typically > 0.75)
-- `bias_ratio` column shows clear winner (e.g., 0.78 parent1 vs 0.22 parent2)
-- The biased allele usually matches the direction of DE (e.g., parent1 biased AND parent1 higher in F1)
+- `is_DE` is true
+- `is_biased` is true
+- Bias toward parent 1 with a positive `logFC_parent1_vs_parent2`, or toward parent 2 with a negative one
 
 **Biological interpretation**:
-- **The gene's regulatory sequence differs between parental lines**
-- This could be:
-  - Mutations in the promoter
-  - Different enhancer elements
-  - Different methylation patterns
-  - Structural variants in regulatory regions
-- One parent's version of the gene is "more active" than the other's
+- In the F1 both alleles sit in the same nucleus and see the same trans factors. An allele that stays ahead there, in the same direction as the difference between the parents, points to a regulatory difference linked to the gene itself.
+- Candidate causes include differences in promoter or enhancer sequence, methylation, or structural variants in regulatory regions. The category does not say which.
 
-**Example scenario** (Arabidopsis × related species):
+**Example** (illustrative):
 ```
-Gene: AT1G01010
-- logFC = +2.15 (Arabidopsis > Lyrata in F1)
-- bias_ratio = 0.75 (75% of diagnostic SNPs show bias)
-- parent1_ratio = 0.78 (78% reads from Arabidopsis allele)
-- Interpretation: Arabidopsis has evolved a MORE ACTIVE promoter/enhancer
-  Result: Even in F1 hybrids, Arabidopsis allele used preferentially
+Gene: GENE0001
+- logFC_parent1_vs_parent2 = +2.15, FDR = 0.001 (parent 1 higher than parent 2)
+- bias_ratio = 0.75 (75% of diagnostic SNPs show bias), predominant_bias = parent1
+- parent1_ratio = 0.78 (78% of F1 reads come from the parent 1 allele)
+- Category: cis. The parent 1 copy is expressed more both between the
+  parents and within the F1.
 ```
 
 **What to do next**:
@@ -54,50 +56,46 @@ Gene: AT1G01010
 4. **Validation**: Real-time qPCR with allele-specific primers
 5. **Functional assays**: Measure enhancer activity in both directions (if lab work planned)
 
-**Tips for finding cis-regulatory variants**:
-- `snp_count` ≥ 4 makes bias estimates more reliable
-- Focus on genes with consistent bias (same SNPs showing bias repeatedly)
-- Look for genes with extreme logFC and bias_ratio (easier to validate)
+**Tips for choosing cis candidates** (rules of thumb, not applied by ASEIntegrate):
+- More SNPs behind a gene (`snp_count`) make the allelic estimate more reliable
+- With an ASErtain table, `ase_q_value` holds ASErtain's q-value for the gene
+- Genes with a large `logFC_parent1_vs_parent2` and a clear allelic ratio are easier to validate
 
 ---
 
-#### Category 2: `trans`-regulated
+#### Category 2: `trans_only`
 
-**Definition**: Gene shows significant DE BUT little/no allelic bias.
+**Definition**: The gene is DE between the parents but is NOT allelically biased in the F1.
 
 **Key characteristics**:
-- FDR < 0.05 (statistically different expression)
-- Low `bias_ratio` (typically < 0.5)
-- Ratios approximately 50:50 (e.g., 0.51 parent1 vs 0.49 parent2)
-- Both alleles expressed in similar proportions (unbiased)
+- `is_DE` is true
+- `is_biased` is false (summary table: `bias_ratio` of 0.5 or less)
+- The allelic ratio is usually close to 50:50 (e.g., 0.51 vs 0.49), but the rule looks at the bias call, not at the ratio
 
 **Biological interpretation**:
-- **The gene's regulatory change is NOT in the gene itself**
-- Instead, expression is controlled by **trans-acting factors** (DNA), such as:
+- The parents differ, yet the two alleles are expressed alike once they share one nucleus. The difference is then attributed to **trans-acting factors**, such as:
   - Diffusible transcription factors (TFs)
   - Chromatin modifiers
   - RNA-binding proteins
   - micro-RNAs
   - Signaling molecules
-- These factors act on BOTH parental alleles equally
+- These factors act on both parental alleles equally
 - The two parents likely differ in the genes encoding these trans factors
 
-**Example scenario** (pepper cross):
+**Caution**: "not biased" also covers "bias could not be shown". A gene with few SNPs or low coverage, and a summary-table gene listed with `snp_count = 0`, lands here when it is DE. `trans_only` therefore includes genes where a cis difference may exist but was not detected.
+
+**Example** (illustrative):
 ```
-Gene: Caper_001030
-- logFC = +1.89 (BellPepper > ChiliPepper in F1)
-- bias_ratio = 0.50 (50% of SNPs show bias - total noise)
-- parent1_ratio = 0.51 (essentially 50:50)
-- Interpretation: BellPepper produces a trans factor (maybe a TF?)
-  that activates BOTH the BellPepper AND ChiliPepper versions of this gene.
-  Result: In F1, this gene is upregulated even though both alleles
-  are equally used.
+Gene: GENE0002
+- logFC_parent1_vs_parent2 = +1.89, FDR = 0.008 (parent 1 higher than parent 2)
+- bias_ratio = 0.50, parent1_ratio = 0.51 (alleles close to 50:50 in the F1)
+- Category: trans_only. The parents differ, but the two alleles are
+  expressed alike in the F1.
 ```
 
 **What to do next**:
 1. **Causative trans factor**: Which gene encodes the regulator?
-   - Run DE analysis on known TFs; see which correlates
-   - RNA-seq of TF candidates in parents vs F1
+   - Check which known regulators are themselves DE between the parents
    - ChIP-seq if TF antibodies available
 2. **Pathway analysis**: Do genes in this category share functional terms?
    - May point to a common TF or pathway
@@ -111,124 +109,88 @@ Gene: Caper_001030
 
 #### Category 3: `trans_compensatory`
 
-**Definition**: Gene shows significant DE, but allele bias OPPOSES the DE direction.
+**Definition**: The gene is DE between the parents and allelically biased, but the bias points to the LESS highly expressed parent.
 
 **Key characteristics**:
-- FDR < 0.05 (expression is different)
-- High `bias_ratio` (clear allele preference)
-- BUT the biased allele is from the parent with LOWER overall expression
-- Example: F1 shows more expression from Parent2, but allele bias favors Parent1
+- `is_DE` is true
+- `is_biased` is true
+- Bias toward parent 1 with a negative `logFC_parent1_vs_parent2`, or toward parent 2 with a positive one
 
 **Biological interpretation**:
-- **Complex regulatory divergence**: Two opposing changes have occurred
-- **Cis change**: Gene has regulatory mutations that favor one allele (call this direction the "cis effect")
-- **Trans change**: But trans factors from the other parent override this, flipping the outcome
-- Result: Despite cis regulation, the final expression direction is opposite
+- Two differences act in opposite directions. Within the F1, one allele is the more active one (the cis difference). Between the parents, the other parent is higher, so something outside the gene (trans) pushes the other way and outweighs the cis difference.
+- In the advanced mode such a gene is labelled `Cis x Trans (Opposing)` when both components clear their thresholds.
 
-**Example scenario** (realistic):
+**Example** (illustrative):
 ```
-Gene: AT1G01040
-Scenario: 
-- Parent1 (Barbara) vs Parent2 (Lena) in F1 cross
-- logFC = -1.34 in F1 (F1 lower than Barbara, biased toward Lena)
-- BUT allele bias shows Barbara bias (0.92 Barbara, 0.08 Lena)
+Gene: GENE0003
+- logFC_parent1_vs_parent2 = +1.34, FDR = 0.042 (parent 1 higher than parent 2)
+- bias_ratio = 0.92, predominant_bias = parent2
+- parent1_ratio = 0.08 (F1 reads come mostly from the parent 2 allele)
+- Category: trans_compensatory
 
-Interpretation:
-1. CIS: Barbara has evolved a STRONGER promoter 
-   (intrinsically more active)
-2. TRANS: But Lena produces a trans factor that REPRESSES both alleles
-   (e.g., repressive TF or chromatin modifier)
-3. RESULT: In F1 hybrids, this repressive trans factor dominates,
-   flipping expression direction. Despite Barbara's allele being
-   used 92% of the time, overall F1 expression is low.
-
-Biological meaning: Lena has evolved a trans-acting repressor
-that overcomes Barbara's cis-regulatory divergence.
+Reading:
+1. CIS: within the F1 the parent 2 allele is the more active one.
+2. TRANS: between the parents, parent 1 is higher. A trans difference
+   favours parent 1 and outweighs the cis difference.
 ```
 
 **What to do next**:
-1. **Identify the repressive trans factor**:
-   - Look for DE repressor genes in Lena background
-   - Test with knockdown/overexpression if possible
-2. **Understand the conflict**: Why would these opposing changes exist?
-   - Lena might have lost a TF (compensating for evolved promoter activity)
-   - Or Lena evolved a new repressor as an adaptive response
-3. **Phenotypic consequence**: 
-   - Does the F1 phenotype reflect the final (trans-dominated) expression?
-   - Or do cis effects matter in other tissues/conditions?
-
-**Rarity**: Trans-compensatory genes are usually less common (10-15% of DE genes) because it requires two specific changes to have occurred.
+1. **Look for the trans factor**: regulators that are DE between the parents are candidates
+2. **Check the allelic estimate**: an opposing pattern resting on one or two SNPs deserves a second look before it is interpreted
+3. **Phenotypic consequence**: does the phenotype follow the parental (trans-dominated) expression level?
 
 ---
 
 #### Category 4: `compensatory`
 
-**Definition**: Gene shows NO significant DE, but still has allelic bias.
+**Definition**: The gene is NOT DE between the parents, but is allelically biased in the F1.
 
 **Key characteristics**:
-- FDR ≥ 0.05 (expression NOT significantly different)
-- High `bias_ratio` (clear allele preference)
-- But net expression level is unchanged
+- `is_DE` is false (FDR at or above the threshold)
+- `is_biased` is true
 
 **Biological interpretation**:
-- **Cis difference is present, but masked by trans**
-- One allele is genuinely more active (cis)
-- BUT the less-active allele is compensated by trans factors
-- Result: No detectable net difference in expression
-- Example: Cis effect = +1.5 logFC, but trans effect = -1.5 logFC, sum = 0
+- The alleles differ in the F1 although the parents do not differ overall. One explanation is a cis difference that is offset by a trans difference of opposite sign, leaving no net difference between the parents.
+- "Not DE" is absence of evidence. A gene that just misses the FDR threshold lands here too, so this category is not proof of exact compensation.
+- The basic analysis does not test the two components. `cis_log2` and `trans_log2` describe them for each gene.
 
-**Example scenario**:
+**Example** (illustrative):
 ```
-Gene: AT1G05000
-- logFC = +0.12 (NOT significant; FDR = 0.89)
-- bias_ratio = 0.67 (67% of SNPs favor parent1)
-- parent1_ratio = 0.65
-
-Interpretation:
-- Parent1 allele is genuinely more active (allele bias shows this)
-- BUT parent2 produces trans factors that specifically upregulate
-  the parent2 allele
-- Result: Both alleles contribute similarly to total expression
-- Net effect: No DE detected
-
-Biological meaning: Might be an example of "balancing selection" where
-natural selection favors trans-acting compensatory mechanisms.
+Gene: GENE0004
+- logFC_parent1_vs_parent2 = +0.12, FDR = 0.89 (parents not different)
+- bias_ratio = 0.67, predominant_bias = parent1, parent1_ratio = 0.65
+- cis_log2 = 0.89, trans_log2 = -0.77
+- Category: compensatory. The parent 1 allele is favoured in the F1,
+  with no matching difference between the parents.
 ```
 
 **What to do next**:
 1. **Importance depends on context**:
-   - If phenotype doesn't differ → compensatory is "working as designed"
-   - If phenotype differs → may indicate incomplete compensation
-2. **Candidate genes for stabilizing selection**: 
-   - These genes show evidence of trans-acting compensation
-   - May be under selection pressure for dosage balance
-3. **Allele-specific RT-qPCR**: Validate cis effect is real despite no net DE
+   - If the phenotype does not differ between the parents, the allelic difference has no net effect on expression level
+2. **Allele-specific RT-qPCR**: Confirm the allelic difference
 
 ---
 
 #### Category 5: `no_divergence`
 
-**Definition**: No significant DE and no allelic bias.
+**Definition**: The gene is not DE between the parents and not allelically biased.
 
 **Key characteristics**:
-- FDR ≥ 0.05 (expression NOT significantly different)
-- Low `bias_ratio` (no allele preference)
-- 50:50 allele ratio (or no diagnostic SNPs, `snp_count = 0`)
+- `is_DE` is false
+- `is_biased` is false
 
 **Biological interpretation**:
-- **No regulatory divergence between parents at this gene**
-- Expression is similar between groups
-- Both alleles used in similar proportions
-- Most of the genome falls into this category (no divergence)
+- No regulatory divergence was detected at this gene: expression is similar between the parents and neither allele is favoured in the F1
 
 **Two scenarios**:
-1. **True lack of divergence**: Gene identical between parents, no selection/mutation
-2. **Lack of diagnostic SNPs** (`snp_count = 0`): Cannot determine if bias exists (insufficient data)
+1. **No divergence**: the gene is regulated alike in both parents
+2. **No evidence**: too few SNPs or too little coverage to detect a bias. A summary-table gene listed with `snp_count = 0` is classified as unbiased, so it lands here when it is not DE
+
+Genes with no row at all in the ASE table are a third case: they are not in the output and have no category.
 
 **What to do next**:
-- Usually ignored (they're the background)
-- Use as negative controls in validation experiments
-- In QTL studies, these genes are unlikely to show linkage
+- Usually treated as background
+- Use as negative controls in validation experiments, choosing genes with enough SNPs for the unbiased call to mean something
 
 ---
 
@@ -238,126 +200,134 @@ natural selection favors trans-acting compensatory mechanisms.
 
 When you open `*_with_ASE.tsv`, what matters?
 
-| Metric | What It Tells You | How to Use |
+| Column | What It Tells You | How to Use |
 |--------|-------------------|-----------|
-| `logFC` | Direction + magnitude of expression difference | Positive = group1 higher; >2 or <-2 is "large" |
-| `FDR` | Statistical confidence in DE | <0.05 usually means "believe it"; <0.01 more confident |
-| `snp_count` | Reliability of ASE estimate | ≥4 means robust; <2 means uncertain |
-| `bias_ratio` | Consistency of allele bias | >0.75 means very strong; 0.5 means no bias |
-| `ase_de_category` | Regulatory mechanism | Tells you cis vs. trans |
-| `parent1_ratio` | Which allele dominates | >0.75 = strong parent1 bias; ≈0.5 = no bias |
+| `logFC_parent1_vs_parent2` | Direction + magnitude of the parental difference | Positive = parent 1 higher. `logFC` holds the same number in the orientation of the file name |
+| `FDR` | Statistical confidence in DE | Below `--fdr-threshold` = DE (`is_DE`) |
+| `snp_count` | Number of SNPs behind the ASE estimate | More SNPs = more robust; one or two = uncertain |
+| `bias_ratio` | Summary table only: fraction of SNPs showing bias | Above 0.5 = biased; `NA` with an ASErtain table |
+| `is_biased` | The bias call the category uses | ASErtain's `ase_call`, or `bias_ratio > 0.5` |
+| `ase_de_category` | Regulatory category | See Section 1 |
+| `<parent1_label>_ratio` | Fraction of F1 reads from the parent 1 allele | 0.5 = balanced; near 0 or 1 = strong imbalance |
+| `cis_log2`, `trans_log2` | Descriptive sizes of the cis and trans components | `cis_log2` = log2 allelic ratio; `trans_log2` = parental difference minus `cis_log2` |
+
+ASEIntegrate itself applies only the FDR threshold and the bias call. The remarks about SNP numbers are aids for reading the table.
 
 ### Example: Parsing a Single Gene Row
 
+Selected columns, illustrative values, default labels:
+
 ```
-TranscriptID: AT1G15234
+TranscriptID: GENE0010
 logFC: 2.45
+logFC_parent1_vs_parent2: 2.45
 FDR: 2.3e-05
-ase_de_category: cis
 snp_count: 7
 bias_ratio: 0.86
 predominant_bias: parent1
 parent1_ratio: 0.82
 parent2_ratio: 0.18
+is_DE: TRUE
+is_biased: TRUE
+ase_de_category: cis
+cis_log2: 2.19
+trans_log2: 0.26
 ```
 
 **What this means**:
-1. **AT1G15234** is upregulated ~5.5-fold (2.45 logFC) in group 1
-2. **Very significant** (FDR = 0.000023; essentially certain)
-3. **Mechanism is cis**: The gene's regulatory region evolved
-4. **Robust ASE call**: 7 diagnostic SNPs, 86% show same bias pattern
-5. **Parent1-biased**: Parent1's allele used 82% of the time
-6. **Interpretation**: Parent1 has the more active version of this gene's promoter
+1. **GENE0010** is about 5.5-fold higher in parent 1 than in parent 2 (2.45 log2 units)
+2. **Significant** (FDR = 0.000023)
+3. **Category is cis**: the F1 allelic bias points the same way as the parental difference
+4. **ASE estimate**: 7 diagnostic SNPs, 86% of them showing bias
+5. **Parent 1-biased**: the parent 1 allele supplies 82% of the F1 reads
+6. **Sizes**: the allelic ratio (`cis_log2` = 2.19) accounts for most of the parental difference; the remainder (`trans_log2` = 0.26) is small
 
-**Bottom line**: High-confidence cis-regulated gene, worth investigating.
+**Bottom line**: a cis candidate worth following up.
 
 ---
 
-### Example: Genes to Deprioritize
+### Example: A Row That Carries No Information
 
 ```
-TranscriptID: AT1G89456
-logFC: 0.34
+TranscriptID: GENE0020
+logFC_parent1_vs_parent2: 0.34
 FDR: 0.67
-ase_de_category: no_divergence
 snp_count: 0
 bias_ratio: 0.00
 predominant_bias: parent1
 parent1_ratio: 0.50
 parent2_ratio: 0.50
+is_DE: FALSE
+is_biased: FALSE
+ase_de_category: no_divergence
 ```
 
 **What this means**:
-1. **Not significantly different** between groups
-2. **No allele bias** (and no SNPs to measure it)
-3. **Not diverged** between parents
-4. **No interest for this analysis**
+1. **Not DE** between the parents
+2. **No SNPs**, so the "unbiased" call says nothing about the alleles
+3. The label is `no_divergence` only because the summary table listed the gene with zero SNPs; had it been DE, the label would be `trans_only`
 
-**Bottom line**: This is background; move on.
+**Bottom line**: do not count rows like this as evidence for either category. Leaving such genes out of the ASE table avoids the problem.
 
 ---
 
 ## Section 3: Making Figures and Tables for Papers
 
-### Table 1: Top Cis-Regulated Genes
+The snippets below read the classified comparison's table. Replace `Parent1_vs_Parent2` with the name of your parental comparison, and `parent1_ratio` with `<parent1_label>_ratio` if you use custom labels.
 
-For your manuscript:
+### Table 1: Top Cis Candidates
 
-```sql
-SELECT TranscriptID, logFC, FDR, bias_ratio, snp_count 
-FROM *_with_ASE.tsv
-WHERE ase_de_category = "cis" 
-  AND FDR < 0.01
-  AND snp_count >= 4
-  AND abs(logFC) > 1.0
-ORDER BY FDR
-LIMIT 15;
+```R
+x <- read.delim("Parent1_vs_Parent2_with_ASE.tsv")
+top <- subset(x, ase_de_category == "cis" & FDR < 0.01 & snp_count >= 4 &
+                 abs(logFC_parent1_vs_parent2) > 1)
+top <- top[order(top$FDR), c("TranscriptID", "logFC_parent1_vs_parent2", "FDR",
+                             "snp_count", "cis_log2", "trans_log2")]
+head(top, 15)
 ```
 
-This gives you:
-- High-confidence genes
-- Robust ASE estimates (≥4 SNPs)
-- Large fold-changes (easier to validate)
+This gives you genes that:
+- Are in the `cis` category
+- Have at least 4 SNPs behind the ASE estimate
+- Show a large parental fold change (easier to validate)
+
+The cutoffs here (0.01, 4 SNPs, 1 log2 unit) are choices for this table, not values used by ASEIntegrate.
 
 ---
 
 ### Figure 1: Volcano Plot + Category Coloring
 
 ```R
-# Pseudocode for enhanced volcano plot
-ase_data <- read.table("comparison_with_ASE.tsv")
+palette_cat <- c(cis = "red", trans_only = "blue", trans_compensatory = "darkgreen",
+                 compensatory = "orange", no_divergence = "grey60")
 
-colors <- ifelse(ase_data$ase_de_category == "cis", "red",
-         ifelse(ase_data$ase_de_category == "trans_only", "blue",
-         ifelse(ase_data$ase_de_category == "trans_compensatory", "green",
-         ifelse(ase_data$ase_de_category == "compensatory", "orange", 
-                "gray"))))
-
-plot(ase_data$logFC, -log10(ase_data$FDR),
-     col = colors, main = "DE Results Colored by Regulatory Mechanism",
-     xlab = "log2FC", ylab = "-log10(FDR)")
+plot(x$logFC_parent1_vs_parent2, -log10(x$FDR),
+     col = palette_cat[x$ase_de_category], pch = 19,
+     xlab = "log2 fold change (parent 1 / parent 2)", ylab = "-log10(FDR)",
+     main = "Parental DE coloured by ASE + DE category")
+legend("topleft", legend = names(palette_cat), col = palette_cat, pch = 19, bty = "n")
 ```
 
-**Interpretation for viewers**: One glance shows where regulatory mechanisms differ.
+Only genes with an ASE row are in the table, so this is not the full volcano plot of the comparison.
 
 ---
 
-### Figure 2: Allele Bias vs. logFC (Scatter)
+### Figure 2: Allele Fraction vs. Fold Change (Scatter)
+
+ASEIntegrate already writes this plot as `{comparison}_ASE_vs_DE.pdf` / `.png`. To redraw it with your own styling:
 
 ```R
-# Plot bias against DE magnitude
-plot(ase_data$parent1_ratio, ase_data$logFC,
-     col = colors, pch = 19,
-     xlab = "Parent1 Allele Ratio",
-     ylab = "log2FC",
-     main = "Allele Bias vs. Expression Difference")
-abline(v=0.5, h=0, lty=2, col="gray")  # Reference lines
+plot(x$logFC_parent1_vs_parent2, x$parent1_ratio,
+     col = palette_cat[x$ase_de_category], pch = 19,
+     xlab = "log2 fold change (parent 1 / parent 2)",
+     ylab = "Parent 1 allele fraction in the F1")
+abline(h = 0.5, v = 0, lty = 2, col = "grey50")  # Reference lines
 ```
 
 Shows:
-- **Diagonal (lower-left to upper-right)**: Cis regulation (concordant bias and DE)
-- **Horizontal spread**: Trans regulation (bias ≈ 0.5, but varying logFC)
-- **Diagonal (upper-left to lower-right)**: Trans-compensatory (opposing bias and DE)
+- **Upper right and lower left**: allelic bias and parental difference agree (`cis`)
+- **Upper left and lower right**: they oppose (`trans_compensatory`)
+- **Spread along x near y = 0.5**: parental difference without allelic imbalance (`trans_only`)
 
 ---
 
@@ -365,49 +335,59 @@ Shows:
 
 ### Issue: "Most genes are in `no_divergence`; is analysis broken?"
 
-**This is NORMAL.**
+**Not necessarily.** A large `no_divergence` class is expected when most genes are neither DE between the parents nor allelically biased.
 
-Most genes in any genome show no regulatory divergence. Typical breakdown:
-- 60-80% `no_divergence` (background)
-- 10-20% `cis`
-- 10-15% `trans`
-- 5-10% `trans_compensatory` + `compensatory`
-
-If you have >50% DE genes, your groups might be too different (or same tissue not matched well).
+The proportions depend on how diverged the parents are, on SNP density and read depth, on the thresholds, and on which ASE table was used (a tested call such as ASErtain's is stricter than `bias_ratio > 0.5`). This guide gives no reference percentages; compare categories within your own experiment.
 
 ---
 
-### Issue: "All genes are trans-regulated; no cis effects detected"
+### Issue: "All DE genes are `trans_only`; no cis effects detected"
 
 **Possible causes**:
-1. **Poor SNP coverage**: If `snp_count` is low across genes, ASE signal is weak
-   - Check: Do most genes have `snp_count` = 0?
-   - Fix: Need more genetic markers (whole-genome SNP set?)
-2. **Parents too similar**: If parents are subspecies, regulatory differences might be small
-3. **Hybrid imbalance**: Genome imbalance in hybrid might mask cis signals
+1. **Few genes are called biased**: with little SNP coverage or depth, bias is rarely detected and DE genes default to `trans_only`
+   - Check: how many genes have `is_biased` true? What does `snp_count` look like across genes?
+2. **Parents very similar**: few SNPs separate the alleles, so few genes can be assessed at all
 
 **What to do**:
-- Check `snp_count` distribution across genes
-- Verify parents are genetically distinct (run DE on parent only samples)
-- Look at `cis_regulatory_candidates_all.tsv` — are there ANY cis genes?
+- Check the `snp_count` distribution across genes
+- Count the genes with `is_biased` true, whatever their category
+- Look at `cis_regulatory_candidates_all.tsv`: the file is only written when at least one gene is `cis`
+
+---
+
+### Issue: "`cis` and `trans_compensatory` split exactly by the sign of the fold change"
+
+**Symptom**: every biased DE gene with a positive `logFC_parent1_vs_parent2` is `trans_compensatory` and every one with a negative value is `cis`.
+
+**Possible cause**: the parent 1 label does not match the ASE table. The direction of bias is read by comparing `predominant_bias` with `--parent1-label`, and every other value counts as parent 2. If the values in the table are spelled differently from the label, every biased gene is read as biased toward parent 2.
+
+**What to do**:
+- Compare the values in `predominant_bias` (ASErtain: `direction`) with the two labels you passed; they are case-sensitive
+- Check `bias_p1`: it should be true for some of the biased genes
+
+---
+
+### Issue: "A gene I expected is missing from the output"
+
+**Possible reasons**:
+1. **No ASE row**: only genes present in both the DE table and the ASE table are written
+2. **Not in the DE table**: EdgeRDE filters out weakly expressed genes before testing
+3. **Gene ID mismatch**: the ASE table must use the gene-level ID; `.T[digit]` suffixes are removed from the DE side only, and the match is case-sensitive
+4. **Merged paralog**: a gene folded into a `PARA_*` feature has no DE row of its own
 
 ---
 
 ### Issue: "Results don't match my hypothesis about gene X"
 
 **Possible reasons**:
-1. **Gene ID mismatch**: Verify ID in output matches your reference
-   - Example: Expected `GeneA` but got `GeneA.T1` or different nomenclature
-2. **Low SNP count**: `snp_count = 1` or `2` = unreliable
-   - ASE signal is noisy with few SNPs
-3. **Different tissue**: Cis vs. trans varies by tissue
-   - Maybe cis in leaf, trans in root
-4. **Confounding factors**: If parents differ in multiple ways (location, growth conditions), effect size might be driven by environment
+1. **Low SNP count**: `snp_count` of 1 or 2 makes the ASE estimate noisy
+2. **Different tissue**: cis and trans effects can differ between tissues
+3. **Confounding factors**: if the parents differ in growth conditions as well as genotype, part of the parental difference is environmental and is counted as trans
 
 **What to do**:
-- Check the gene's row directly in output file (search by ID)
-- Look at `snp_count` specifically for your gene
-- Do independent validation (qRT-PCR, allele-specific)
+- Check the gene's row directly in the output file (search by ID)
+- Look at `snp_count` and the allelic ratio for that gene
+- Do independent validation (allele-specific qRT-PCR)
 
 ---
 
@@ -421,16 +401,20 @@ If you ran the advanced mode (`--expression-file`, `--metadata-file`, `--hybrid-
 - `parental_log2`: log2 of the parental expression ratio. This is cis plus trans.
 - `trans_log2 = parental_log2 - cis_log2`.
 
-`Regulation` classifies each gene from these (`Cis-only`, `Trans-only`, `Cis + Trans (Reinforcing)`, `Cis x Trans (Opposing)`, `Compensatory`, `Conserved`, `Ambiguous`). The thresholds are descriptive and the trans component is not tested, so treat a class as a description of where the gene sits, not as a significance call.
+`Regulation` classifies each gene from these (`Cis-only`, `Trans-only`, `Cis + Trans (Reinforcing)`, `Cis x Trans (Opposing)`, `Compensatory`, `Conserved`, `Ambiguous`). "Cis" means the parent 1 allele fraction is outside 0.5 ± 0.1, "trans" means `|trans_log2| ≥ 1`, and "parents differ" means the gene is DE in the parental comparison (`parents_differ`). The thresholds are descriptive and the trans component is not tested, so treat a class as a description of where the gene sits, not as a significance call.
+
+This classification is separate from `ase_de_category` of the basic analysis. It does not use the bias call at all: the cis side comes from the allele fraction alone. A gene can therefore be `trans_only` in the basic table and `Cis-only` here, or the reverse. A gene that is in the expression matrix but absent from the DE table counts as "parents do not differ" and can only be `Compensatory` or `Conserved`.
 
 ### Ad and Ed
 
 - `Ad = 0.5 -` parent 1 allele fraction: the allelic imbalance on the fraction scale.
 - `Ed = 0.5 - (F1 - P2) / (P1 - P2)`: where the F1's *total* expression sits between the parents. Zero is mid-parent (additive); negative is parent 1-like.
 
-`Ed` is about dominance of expression, not about trans. They come apart in both directions: a purely additive trans difference gives `Ed = 0`, and an F1 can resemble the parent whose allele it expresses less. `Ed` is empty for genes whose parents are not differentially expressed, because there it would be a ratio of noise.
+`Ed` is about dominance of expression, not about trans. They come apart in both directions: a purely additive trans difference gives `Ed = 0`, and an F1 can resemble the parent whose allele it expresses less. `Ed` is `NA` for genes whose parents are not differentially expressed, because there it would be a ratio of noise.
 
 ### Example readings
+
+Illustrative values:
 
 ```
 cis_log2 = 2.0, trans_log2 = 0.0, Ed = 0.0   -> Cis-only, additive inheritance
@@ -444,10 +428,12 @@ cis_log2 = 1.8, parents not different        -> Compensatory
 
 ## Section 6: Common Biological Interpretations
 
+The scenarios below are hypotheses that a pattern of category counts is compatible with. The counts alone do not establish them: the proportions also depend on SNP density, read depth, the thresholds and the ASE table used.
+
 ### Scenario 1: Recent Speciation
 
 **Pattern**:
-- High proportion of `trans` genes
+- High proportion of `trans_only` genes
 - Few `cis` genes
 - Few `trans_compensatory`
 
@@ -462,7 +448,7 @@ cis_log2 = 1.8, parents not different        -> Compensatory
 
 **Pattern**:
 - High proportion of `cis` genes
-- Lower proportion of `trans`
+- Lower proportion of `trans_only`
 - More `trans_compensatory` and `compensatory`
 
 **Interpretation**:
@@ -476,8 +462,8 @@ cis_log2 = 1.8, parents not different        -> Compensatory
 
 **Pattern**:
 - Differences between tissues:
-  - Leaf tissue: Mostly `cis` genes (photosynthesis genes)
-  - Root tissue: Mostly `trans` genes (nutrient uptake)
+  - Tissue A: Mostly `cis` genes
+  - Tissue B: Mostly `trans_only` genes
 
 **Interpretation**:
 - Different selection pressures in different tissues
@@ -517,17 +503,17 @@ cis_log2 = 1.8, parents not different        -> Compensatory
 
 ### Key Papers on Cis vs. Trans Regulation
 
-- **Wittkopp et al. (2004)** - Cis/trans decomposition from allelic expression in F1 hybrids
+- **Wittkopp, Haerum & Clark (2004)** - Cis/trans decomposition from allelic expression in F1 hybrids
   - "Evolutionary changes in cis and trans gene regulation"
-  - Nature Reviews Genetics
+  - Nature 430:85-88
 
 - **Tirosh & Barkai (2008)** - Yeast evolution
   - Shows ~30% cis, ~70% trans in transcriptional divergence
   - Molecular Systems Biology
 
-- **McManus et al. (2010)** - Great Apes
-  - Tissue-specific cis vs. trans patterns
-  - Nature Reviews Genetics
+- **McManus et al. (2010)** - Cis/trans classes from mRNA-seq of parents and F1 hybrids
+  - "Regulatory divergence in Drosophila revealed by mRNA-seq"
+  - Genome Research 20:816-825
 
 - **Schaefke et al. (2015)** - Drosophila
   - Evidence for complex cis-trans interactions

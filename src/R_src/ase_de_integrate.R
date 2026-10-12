@@ -203,6 +203,19 @@ if (all(asertain_cols %in% colnames(ase_raw))) {
       "  a majority vote over SNPs and not a statistical test.\n", sep = "")
 }
 
+# The direction of every bias is read by comparing this column with
+# parent1_label, so a label that does not occur in it would silently turn every
+# biased gene into "biased toward parent 2". Refuse instead.
+bias_values <- unique(as.character(ase_data$predominant_bias))
+bias_values <- bias_values[!is.na(bias_values) &
+                           !tolower(bias_values) %in% c("", "na", "balanced", "none")]
+unknown_values <- setdiff(bias_values, c(parent1_label, parent2_label))
+if (length(unknown_values) > 0)
+  stop("The ASE table's bias direction column holds value(s) that are neither ",
+       "--parent1-label ('", parent1_label, "') nor --parent2-label ('",
+       parent2_label, "'): ", paste(head(unknown_values, 5), collapse = ", "),
+       ". The two labels must be spelled exactly as in that column.")
+
 cat("Loaded ASE data for", nrow(ase_data), "genes\n\n")
 
 # ---------------------------------------------------------------------------
@@ -224,8 +237,16 @@ orient_comparison <- function(cmp) {
   has <- function(x, label) grepl(tolower(label), tolower(x), fixed = TRUE)
   only1 <- function(x) has(x, parent1_label) && !has(x, parent2_label)
   only2 <- function(x) has(x, parent2_label) && !has(x, parent1_label)
-  if (only1(parts[1]) && only2(parts[2])) return(1)
-  if (only2(parts[1]) && only1(parts[2])) return(-1)
+  # The two group names must differ ONLY by the parent label. Otherwise
+  # "lineA_leaf_vs_lineB_root" would qualify and tissue would be read as a
+  # parental difference.
+  rest <- function(x, label) sub(tolower(label), "", tolower(x), fixed = TRUE)
+  same_condition <- function(a, b)
+    rest(a, parent1_label) == rest(b, parent2_label)
+  if (only1(parts[1]) && only2(parts[2]) && same_condition(parts[1], parts[2]))
+    return(1)
+  if (only2(parts[1]) && only1(parts[2]) && same_condition(parts[2], parts[1]))
+    return(-1)
   NA_real_
 }
 
@@ -258,6 +279,7 @@ categorise_gene <- function(is_de, is_biased, bias_toward_p1, logfc) {
 all_cis_candidates <- list()
 parental_de        <- NULL   # oriented DE of the parental comparison, for step 4
 n_classified       <- 0
+parental_found     <- character(0)
 
 for (de_file in de_files) {
   cmp <- sub("_DE_results\\.tsv$", "", basename(de_file))
@@ -272,6 +294,7 @@ for (de_file in de_files) {
       if (orientation > 0) "(logFC used as named)" else
         "(logFC sign flipped so that positive = higher in parent 1)", "\n")
 
+  parental_found <- c(parental_found, cmp)
   de_data <- read_tsv(de_file, show_col_types = FALSE)
 
   # Strip .T[digit] transcript suffix so gene IDs match ASE gene_id
@@ -361,6 +384,14 @@ for (de_file in de_files) {
   cat("  Cis-regulatory candidates:", nrow(cis), "\n\n")
 }
 
+if (n_classified == 0 && length(parental_found) > 0) {
+  stop(
+    "The parental comparison was found (", paste(parental_found, collapse = ", "),
+    ") but none of its gene IDs occur in the ASE table, so nothing was ",
+    "classified. Compare the TranscriptID column of the DE results (after any ",
+    ".T[digit] suffix is removed) with the gene_id column of the ASE table."
+  )
+}
 if (n_classified == 0) {
   stop(
     "No DE comparison could be identified as parent 1 versus parent 2, so nothing ",
@@ -401,6 +432,7 @@ if (length(all_cis_candidates) > 0) {
 #   Conserved                   neither
 #   Ambiguous                   parents differ but neither component clears
 #                               its threshold
+#   Not tested (no DE result)   the gene has no row in the parental DE results
 #
 # It is descriptive: "cis" means the parent-1 allele fraction is outside
 # 0.5 +/- 0.1, "trans" means |trans_log2| >= 1, "parents differ" comes from the
@@ -426,8 +458,7 @@ if (length(all_cis_candidates) > 0) {
 # Ed divides by the parental difference, so it is undefined where the parents do
 # not differ and explodes where they barely do. It is computed only for genes
 # whose parents are differentially expressed (FDR below the threshold in the
-# parent 1 versus parent 2 comparison; a two-fold difference in mean CPM when
-# that comparison is not among the DE results).
+# parent 1 versus parent 2 comparison).
 
 run_advanced <- !is.null(expression_file) &&
                 !is.null(metadata_file) &&
@@ -437,6 +468,7 @@ run_advanced <- !is.null(expression_file) &&
 
 classify_regulatory <- function(ad, cis_log2, trans_log2, parents_differ,
                                 cis_thresh = 0.1, trans_thresh = 1.0) {
+  if (is.na(parents_differ)) return("Not tested (no DE result)")
   has_cis   <- abs(ad) > cis_thresh
   has_trans <- abs(trans_log2) >= trans_thresh
   if (!parents_differ)
@@ -475,8 +507,19 @@ if (run_advanced) {
   col_lower <- tolower(colnames(meta))
   if ("sample_name" %in% col_lower)
     colnames(meta)[col_lower == "sample_name"] <- "Sample"
-  if ("group" %in% col_lower)
+  if ("sample" %in% col_lower && !"Sample" %in% colnames(meta))
+    colnames(meta)[col_lower == "sample"] <- "Sample"
+  if ("group" %in% col_lower) {
     colnames(meta)[col_lower == "group"] <- "Group"
+  } else if (all(c("species", "tissue") %in% col_lower)) {
+    # Same derivation as EdgeRDE, so the group names match the DE file names.
+    meta$Group <- paste(meta[[which(col_lower == "species")]],
+                        meta[[which(col_lower == "tissue")]], sep = "_")
+  } else {
+    stop("Metadata must contain a 'group' column, or both 'species' and 'tissue'.")
+  }
+  if (!"Sample" %in% colnames(meta))
+    stop("Metadata must contain a 'sample_name' or 'Sample' column.")
 
   # Retain samples present in the expression matrix
   meta <- meta[meta$Sample %in% colnames(expr_matrix), ]
@@ -506,27 +549,23 @@ if (run_advanced) {
     stringsAsFactors = FALSE
   )
 
-  combined_ad_ed <- inner_join(ase_data, expr_summary, by = "gene_id")
+  combined_ad_ed <- inner_join(rename(ase_data, is_biased = is_biased_input),
+                               expr_summary, by = "gene_id")
   if (nrow(combined_ad_ed) == 0)
     stop("No gene IDs are shared between the ASE table and the expression ",
          "matrix (after stripping any .T[digit] suffix). Check the ID format.")
 
-  # Which genes have parents that really differ?
+  # Which genes have parents that really differ? Taken from the parental DE
+  # test. A gene with no row there (filtered out before testing, typically for
+  # low expression) is UNTESTED: parents_differ is NA, not FALSE.
   combined_ad_ed$parental_log2 <- log2((combined_ad_ed$parent1_avg + 0.5) /
                                        (combined_ad_ed$parent2_avg + 0.5))
-  if (!is.null(parental_de)) {
-    de_lookup <- parental_de[!duplicated(parental_de$gene_id_base), ]
-    hit <- match(combined_ad_ed$gene_id, de_lookup$gene_id_base)
-    combined_ad_ed$parental_FDR  <- de_lookup$FDR[hit]
-    combined_ad_ed$parents_differ <- !is.na(combined_ad_ed$parental_FDR) &
-                                     combined_ad_ed$parental_FDR < fdr_threshold
-    cat("Parental difference taken from the DE results (FDR <", fdr_threshold, ")\n")
-  } else {
-    combined_ad_ed$parental_FDR  <- NA_real_
-    combined_ad_ed$parents_differ <- abs(combined_ad_ed$parental_log2) >= 1
-    cat("Parental comparison not found among the DE results; using a two-fold",
-        "difference in mean CPM instead.\n")
-  }
+  de_lookup <- parental_de[!duplicated(parental_de$gene_id_base), ]
+  hit <- match(combined_ad_ed$gene_id, de_lookup$gene_id_base)
+  combined_ad_ed$parental_FDR   <- de_lookup$FDR[hit]
+  combined_ad_ed$parents_differ <- combined_ad_ed$parental_FDR < fdr_threshold
+  cat("Parental difference taken from the DE results (FDR <", fdr_threshold, ");",
+      sum(is.na(combined_ad_ed$parents_differ)), "gene(s) have no DE result\n")
 
   clip <- function(x) pmin(pmax(x, 1e-3), 1 - 1e-3)
   combined_ad_ed <- combined_ad_ed %>%
@@ -538,7 +577,7 @@ if (run_advanced) {
       parental_diff = parent1_avg - parent2_avg,
       # F1 position on the parental spectrum (1 = parent1-like, 0 = parent2-like)
       position_ratio = ifelse(
-        parents_differ & parental_diff != 0,
+        !is.na(parents_differ) & parents_differ & parental_diff != 0,
         (hybrid_avg - parent2_avg) / parental_diff,
         NA_real_
       ),
@@ -565,7 +604,8 @@ if (run_advanced) {
 
   # Regression plot per class
   plot_data <- combined_ad_ed %>%
-    filter(!is.na(Ed), Ed >= -1.5, Ed <= 1.5, Regulation != "Ambiguous")
+    filter(!is.na(Ed), Ed >= -1.5, Ed <= 1.5,
+           !Regulation %in% c("Ambiguous", "Not tested (no DE result)"))
 
   if (nrow(plot_data) > 0) {
     group_stats <- plot_data %>%

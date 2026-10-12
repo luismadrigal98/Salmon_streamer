@@ -44,9 +44,9 @@ GENE0005        567             489             601             523
   ```bash
   --sample-suffix "_R1_filtered$"  # Remove '_R1_filtered' before matching metadata
   ```
-- Gene IDs in this file will be matched against ASE counts file
-  - If transcript variants exist (e.g., `AT1G01010.T1`, `AT1G01010.T2`), the ASE script will automatically strip `.T[digit]` suffixes
-  - ASE file should contain gene-level IDs only
+- Gene IDs in this file will be matched against the ASE table
+  - If the IDs carry a transcript suffix (e.g., `GENE0001.T1`, `GENE0001.T2`), ASEIntegrate removes `.T[digit]` before matching
+  - The ASE table should contain gene-level IDs only
 
 ---
 
@@ -111,6 +111,8 @@ sample_6        Parent2     leaf        1
 
 **Result**: EdgeRDE derives groups as `F1_leaf`, `Parent1_leaf`, `Parent2_leaf` and runs all pairwise contrasts.
 
+**For ASEIntegrate's advanced mode** the metadata file must have an explicit `group` column (Option A). ASEIntegrate does not derive groups from `species` + `tissue`, and it has no `--sample-suffix` option, so `sample_name` must equal the count-matrix column headers as they are. If EdgeRDE was run with Option B, add a `group` column holding the derived names (`Parent1_leaf`, ...) before running the advanced mode.
+
 ### Rules
 
 1. **Sample names are case-sensitive** — must match count matrix column headers exactly
@@ -124,94 +126,111 @@ sample_6        Parent2     leaf        1
 
 ## ASE Counts File
 
-### Required Format
+`ASEIntegrate` does not compute allele-specific expression. `--ase-counts-file` takes a finished per-gene ASE table made beforehand with a separate tool. Two formats are accepted and told apart by their columns; lines starting with `#` are skipped in both.
+
+In both formats `gene_id` is used as it is. It is matched against the DE table's `TranscriptID`, and in advanced mode against the first column of the expression matrix, after any `.T[digit]` suffix has been removed from those. The ASE table should therefore hold gene-level IDs without that suffix, and the match is exact and case-sensitive.
+
+### Format A: ASErtain Gene Table (Preferred)
+
+An [ASErtain](https://github.com/luismadrigal98/ASErtain) `<prefix>.gene_ase.tsv` can be passed to `--ase-counts-file` unchanged. It is recognised by its `gene_id`, `n_snps`, `direction` and `ase_call` columns plus a `mean_<label>_ratio` column, where `<label>` is one of the two values given as `--parent1-label` / `--parent2-label` (they must be the lineage labels of the ASErtain config). A gene is then treated as allelically biased when `ase_call` is true, which is a replicate-aware test.
+
+| ASEIntegrate needs | Taken from the ASErtain table |
+|--------------------|-------------------------------|
+| Is the gene allelically biased? | `ase_call` |
+| Toward which parent? | `direction`: the bias is toward parent 1 when the value equals `--parent1-label` |
+| Parent 1 allele fraction | `mean_<label>_ratio`. ASErtain writes this column for one of the two lineages; when it is parent 2's, the parent 1 fraction is one minus it |
+| SNP count | `n_snps` |
+
+`q_value`, `log2_ratio` and `phase_discordance_cause` are copied to the output with an `ase_` prefix when present. No other column of the table is used.
+
+If neither `mean_<parent1_label>_ratio` nor `mean_<parent2_label>_ratio` exists, the run stops and lists the columns it found. When the ASErtain run used its default labels, the column is `mean_variable_ratio` and the labels to pass are `variable` and `fixed`.
+
+### Format B: Summary Table (Legacy)
+
+The older six-column summary table is still accepted. It is the format written by `ase_read_counter.py` of the EDGE_Penstemon pipeline. Here a gene counts as allelically biased when `bias_ratio > 0.5`. That is a majority vote over SNPs, not a statistical test, and it takes no account of read depth or replication.
 
 - **File type**: Tab-separated values (TSV)
 - **First row**: Column headers
-- **First column**: Gene IDs
 - **Numeric columns**: All ratios and counts must be numeric
 
-### Required Columns
+#### Required Columns
 
 1. **`gene_id`**: Gene identifier
-   - Should match gene IDs in count matrix (with or without `.T[digit]` suffix)
-   - ASE script automatically strips `.T1`, `.T2` suffixes
-   - Must be unique (one row per gene)
+   - Gene-level ID, matched as described above
+   - One row per gene (duplicates are not checked for)
 
 2. **`snp_count`**: Number of diagnostic SNPs in this gene
    - Integer ≥ 0
-   - Higher values = more robust bias estimates
-   - Use for filtering: genes with ≥ 4 SNPs are more reliable
+   - Copied to the output; the classification does not use it
 
 3. **`bias_ratio`**: Fraction of diagnostic SNPs showing allelic bias
-   - Numeric, range [0.0, 1.0] (or percentage [0, 100])
-   - Indicates consistency of allele bias across SNPs
-   - High values (> 0.75) indicate strong, consistent bias
+   - Numeric, range [0.0, 1.0], not a percentage. The first rows are checked before the run and a value above 1 stops it
+   - The gene is treated as biased when the value is above 0.5
 
 4. **`predominant_bias`**: Which parent's allele dominates
-   - Must be exactly one of: `parent1` or `parent2` (or your custom labels if using `--parent1-label` / `--parent2-label`)
-   - Case-sensitive
-   - Indicates which parent's allele has more reads
+   - The value given as `--parent1-label` or `--parent2-label` (defaults: `parent1`, `parent2`)
+   - Case-sensitive. Only equality with the parent 1 label is tested, so any other value is read as parent 2
 
 5. **`{parent1_label}_ratio`**: Proportion of reads from parent 1 allele
    - Numeric, range [0.0, 1.0]
    - Default column name: `parent1_ratio`
-   - If using custom labels: `bellpepper_ratio`, `chili_ratio`, etc.
+   - With custom labels, for example `--parent1-label lineA`: `lineA_ratio`
+   - This is the allele fraction used for the plot, `cis_log2` and `Ad`
 
 6. **`{parent2_label}_ratio`**: Proportion of reads from parent 2 allele
    - Numeric, range [0.0, 1.0]
    - Default column name: `parent2_ratio`
-   - Must sum (approximately) with corresponding `{parent1_label}_ratio` to 1.0
+   - Must be present; it is copied to the output and not used in the calculations
 
-### Example (Standard Format)
+Any further columns are copied to the output unchanged.
+
+#### Example (Default Labels)
 
 ```
 gene_id     snp_count   bias_ratio   predominant_bias   parent1_ratio   parent2_ratio
-AT1G01010   8           0.75         parent1            0.78            0.22
-AT1G01020   4           0.50         parent1            0.51            0.49
-AT1G01030   12          0.92         parent2            0.08            0.92
-AT1G01040   2           0.50         parent1            0.45            0.55
-AT1G01050   15          0.87         parent1            0.85            0.15
-AT1G01060   0           0.00         parent1            0.50            0.50
+GENE0001    8           0.75         parent1            0.78            0.22
+GENE0002    4           0.50         parent1            0.51            0.49
+GENE0003    12          0.92         parent2            0.08            0.92
+GENE0004    2           0.50         parent1            0.45            0.55
+GENE0005    15          0.87         parent1            0.85            0.15
 ```
 
-### Example (Custom Labels)
+#### Example (Custom Labels)
 
-When running ASEIntegrate with `--parent1-label BellPepper --parent2-label ChiliPepper`:
+When running ASEIntegrate with `--parent1-label lineA --parent2-label lineB`:
 
 ```
-gene_id         snp_count   bias_ratio   predominant_bias   BellPepper_ratio   ChiliPepper_ratio
-Caper_gene_001  8           0.75         BellPepper        0.78               0.22
-Caper_gene_002  4           0.50         BellPepper        0.51               0.49
-Caper_gene_003  12          0.92         ChiliPepper       0.08               0.92
+gene_id     snp_count   bias_ratio   predominant_bias   lineA_ratio   lineB_ratio
+GENE0001    8           0.75         lineA              0.78          0.22
+GENE0002    4           0.50         lineA              0.51          0.49
+GENE0003    12          0.92         lineB              0.08          0.92
 ```
 
-### Rules
+#### Rules
 
 1. **Parent labels must match** the ones provided to ASEIntegrate:
    - `--parent1-label parent1` expects column `parent1_ratio`
-   - `--parent1-label BellPepper` expects column `BellPepper_ratio`
+   - `--parent1-label lineA` expects column `lineA_ratio`
 
-2. **Ratio columns must sum ≈ 1.0**
-   - Small rounding errors (±0.01) are OK
-   - If they don't sum to ~1.0, check if there are other alleles or unmapped reads
+2. **Ratio columns should sum to about 1.0**
+   - This is not checked. If they do not, look for other alleles or unassigned reads in the tool that made the table
 
-3. **Zero SNPs are allowed**
-   - Genes with `snp_count = 0` will not show allelic bias
-   - Included in "no_divergence" category after integration
+3. **Genes without informative SNPs are still classified**
+   - `snp_count` is not looked at. A gene listed with `snp_count = 0` and `bias_ratio = 0` counts as unbiased, so it comes out `trans_only` when it is DE between the parents and `no_divergence` otherwise; in advanced mode a ratio of 0.5 reads as balanced alleles
+   - Leave such genes out of the table unless that is what you want
 
-4. **Gene IDs must match count matrix**
+4. **Gene IDs must match the DE table**
    - Exact match (case-sensitive)
-   - Transcript suffixes (`.T1`, `.T2`) are handled automatically
-   - If genes in count matrix are `AT1G01010.T1` but ASE file has `AT1G01010`, they will be matched
+   - If the count matrix used `GENE0001.T1` and the ASE table has `GENE0001`, they are matched. The suffix is removed from the DE and expression IDs, never from the ASE table
 
-5. **No duplicate gene IDs** allowed
+5. **One row per gene**
 
-### Data Quality Considerations
+#### Rules of Thumb for Data Quality
 
-- **Reliable bias**: `snp_count ≥ 4` and `bias_ratio > 0.75`
-- **Uncertain bias**: `snp_count < 4` or `bias_ratio < 0.5`
-- **Balanced alleles**: `bias_ratio ≈ 0.5` indicates near-50:50 split
+These are aids for reading the table. ASEIntegrate applies none of them.
+
+- `snp_count ≥ 4` gives a more robust call than one or two SNPs
+- `bias_ratio` is a fraction of SNPs, not an allele ratio: 0.5 means half of the SNPs show bias. The allele split itself is in the `{label}_ratio` columns
 
 ---
 
@@ -262,39 +281,14 @@ Before running EdgeRDE / ASEIntegrate, verify:
 
 ### ASE Counts File
 - [ ] Tab-separated (not spaces or commas)
-- [ ] Contains all required columns
-- [ ] Gene IDs approximately match count matrix IDs
-- [ ] `snp_count` values are non-negative integers
-- [ ] `bias_ratio` values in range [0.0, 1.0]
-- [ ] `predominant_bias` values are `parent1` or `parent2`
-- [ ] Ratio columns sum to approximately 1.0
+- [ ] Gene IDs are gene-level and match the count matrix IDs once any `.T[digit]` suffix is removed from the latter
 - [ ] No duplicate gene IDs
-
----
-
-## Creating ASE Counts File from EDGE_Penstemon
-
-If using the EDGE_Penstemon pipeline, the `ase_read_counter.py` script produces output in the required format:
-
-```bash
-# From EDGE_Penstemon
-python Python_scripts/ase_read_counter.py \
-    --bam-file sample.sorted.bam \
-    --vcf-file variants.vcf \
-    --output ase_counts.tsv
-```
-
-Output will have the required columns:
-```
-gene_id     snp_count   bias_ratio   predominant_bias   parent1_ratio   parent2_ratio
-```
-
-Simply provide this file directly to ASEIntegrate via `--ase-counts-file`.
-
-### ASErtain gene table (preferred)
-
-An ASErtain `<prefix>.gene_ase.tsv` can be passed to `--ase-counts-file` unchanged. It is recognised by its `gene_id`, `n_snps`, `direction` and `ase_call` columns plus a `mean_<label>_ratio` column, where `<label>` is one of the two values given as `--parent1-label` / `--parent2-label` (they must be the lineage labels of the ASErtain config). Lines starting with `#` are skipped. A gene is then treated as allelically biased when `ase_call` is true, which is a replicate-aware test; in the summary format above the criterion is `bias_ratio > 0.5`, a majority vote over SNPs.
-
+- [ ] ASErtain gene table: `--parent1-label` / `--parent2-label` are the lineage labels of the ASErtain config
+- [ ] Summary table: contains all six required columns
+- [ ] Summary table: `snp_count` values are non-negative integers
+- [ ] Summary table: `bias_ratio` values in range [0.0, 1.0]
+- [ ] Summary table: `predominant_bias` values are the two parent labels (`parent1` / `parent2` by default)
+- [ ] Summary table: ratio columns sum to approximately 1.0
 
 ---
 
@@ -320,12 +314,12 @@ Fix: Remove trailing space in metadata
 
 ### Error: "Column 'parent1_ratio' not found in ASE file"
 
-**Cause**: Custom parent labels used, but column names don't match
+**Cause**: Custom parent labels used with a summary table, but column names don't match
 
 **Fix**: Ensure column names match the labels you provide:
 ```bash
---parent1-label BellPepper --parent2-label ChiliPepper
-# Requires columns: BellPepper_ratio, ChiliPepper_ratio
+--parent1-label lineA --parent2-label lineB
+# Requires columns: lineA_ratio, lineB_ratio
 
 --parent1-label sp1 --parent2-label sp2
 # Requires columns: sp1_ratio, sp2_ratio
@@ -361,7 +355,7 @@ print(f"Samples in metadata: {len(metadata)}")
 print(f"Samples in counts: {counts.shape[1]}")
 print(f"Matching samples: {set(metadata['sample_name']) & set(counts.columns)}")
 
-# Check ASE file
+# Check ASE file (summary-table format, default labels)
 ase = pd.read_csv('ase.tsv', sep='\t', index_col=0)
 print(f"Genes in ASE: {len(ase)}")
 print(f"Required columns present: {all(col in ase.columns for col in ['snp_count', 'bias_ratio', 'predominant_bias', 'parent1_ratio', 'parent2_ratio'])}")
